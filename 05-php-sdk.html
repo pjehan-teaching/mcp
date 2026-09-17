@@ -1,0 +1,302 @@
+<section id="php-sdk">
+
+    <section>
+        <h2>Le SDK PHP</h2>
+    </section>
+
+    <section>
+        <h3>Le SDK PHP officiel</h3>
+        <ul>
+            <li>Paquet Composer <code>mcp/sdk</code>, développé par la <strong>PHP Foundation</strong> et le projet <strong>Symfony</strong></li>
+            <li>SDK officiel de niveau 3, en version <code>0.8</code> : <strong>expérimental</strong> jusqu'à la version 1.0</li>
+            <li>Serveurs <strong>et</strong> clients, transports stdio et HTTP</li>
+            <li>Ères <code>legacy</code> et <code>modern</code> servies par le même code</li>
+            <li>Déclaration des tools, resources et prompts par <strong>attributs PHP</strong></li>
+        </ul>
+        <p class="console-error">Dans la version 0.8, l'ère <code>modern</code> n'est servie qu'en HTTP : un serveur stdio parle l'ère <code>legacy</code>.</p>
+        <footer>
+            <a href="https://github.com/modelcontextprotocol/php-sdk" target="_blank" class="info">modelcontextprotocol/php-sdk</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Installation</h3>
+        <p>Le SDK nécessite PHP 8.1 ou plus. On ajoute <code>symfony/finder</code> pour découvrir automatiquement les classes annotées :</p>
+        <div class="tabs-container">
+            <ul class="tabs-buttons-container">
+                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
+            </ul>
+            <div class="tabs">
+                <div class="tab-php active">
+                    <pre><code class="language-bash">composer require mcp/sdk symfony/finder</code></pre>
+                </div>
+            </div>
+        </div>
+        <p>D'autres paquets s'ajouteront selon les besoins :</p>
+        <table>
+            <thead>
+                <tr><th>Besoin</th><th>Paquets</th></tr>
+            </thead>
+            <tbody>
+                <tr><td>Serveur HTTP</td><td><code>nyholm/psr7</code>, <code>laminas/laminas-httphandlerrunner</code></td></tr>
+                <tr><td>Client HTTP</td><td><code>symfony/http-client</code></td></tr>
+                <tr><td>Jetons JWT</td><td><code>firebase/php-jwt</code></td></tr>
+            </tbody>
+        </table>
+        <footer>
+            <a href="https://github.com/modelcontextprotocol/php-sdk/blob/main/docs/get-started/installation.md" target="_blank" class="info">Installation</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Un premier serveur</h3>
+        <div class="tabs-container">
+            <ul class="tabs-buttons-container">
+                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
+            </ul>
+            <div class="tabs">
+                <div class="tab-php active">
+                    <pre style="font-size: 0.45em;" data-line="11-18" class="line-numbers"><code class="language-php">&lt;?php
+
+require __DIR__ . '/vendor/autoload.php';
+
+use Mcp\Capability\Attribute\McpTool;
+use Mcp\Server;
+use Mcp\Server\Transport\StdioTransport;
+
+class Calculator
+{
+    /**
+     * Additionne deux nombres.
+     */
+    #[McpTool]
+    public function add(int $a, int $b): int
+    {
+        return $a + $b;
+    }
+}
+
+exit(Server::builder()
+    -&gt;setServerInfo('Calculator', '1.0.0')
+    -&gt;setDiscovery(__DIR__, ['.'], excludeDirs: ['vendor'])
+    -&gt;build()
+    -&gt;run(new StdioTransport()));</code></pre>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section>
+        <h3>Ce que fait le SDK</h3>
+        <ul>
+            <li><code>#[McpTool]</code> transforme la méthode en tool ; son nom est celui de la méthode</li>
+            <li>Le <strong>docblock</strong> devient la description du tool</li>
+            <li>Les <strong>types des paramètres</strong> deviennent le <code>inputSchema</code> : <code>int $a</code> donne un entier obligatoire</li>
+            <li>Le SDK <strong>valide</strong> les arguments reçus avant d'appeler la méthode</li>
+            <li><code>setDiscovery()</code> parcourt les dossiers à la recherche de classes annotées</li>
+            <li><code>StdioTransport</code> lit <code>stdin</code> et écrit sur <code>stdout</code></li>
+        </ul>
+        <p class="console-error">Jamais d'<code>echo</code>, de <code>var_dump()</code> ou de <code>print_r()</code> dans un serveur stdio : écrivez sur <code>STDERR</code>.</p>
+        <footer>
+            <a href="https://github.com/modelcontextprotocol/php-sdk/blob/main/docs/get-started/first-server.md" target="_blank" class="info">First server</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Tester avec l'Inspector</h3>
+        <p>L'Inspector lance lui-même le serveur :</p>
+        <div class="tabs-container">
+            <ul class="tabs-buttons-container">
+                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
+            </ul>
+            <div class="tabs">
+                <div class="tab-php active">
+                    <pre><code class="language-bash">npx @modelcontextprotocol/inspector php server.php</code></pre>
+                </div>
+            </div>
+        </div>
+        <ul>
+            <li>Onglet <strong>Tools</strong> : le formulaire d'appel est généré à partir du <code>inputSchema</code></li>
+            <li>Appelez <code>add</code> avec <code>a = 2</code> et <code>b = 40</code></li>
+            <li>Consultez l'historique pour lire les messages : vous y verrez <code>initialize</code>, car le serveur stdio parle l'ère <code>legacy</code></li>
+        </ul>
+        <p>Pour une utilisation en ligne de commande :</p>
+        <div class="tabs-container">
+            <ul class="tabs-buttons-container">
+                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
+            </ul>
+            <div class="tabs">
+                <div class="tab-php active">
+                    <pre><code class="language-bash">npx @modelcontextprotocol/inspector --cli php server.php --method tools/list</code></pre>
+                </div>
+            </div>
+        </div>
+        <footer>
+            <a href="https://github.com/modelcontextprotocol/php-sdk/blob/main/docs/get-started/inspector.md" target="_blank" class="info">Try it with the Inspector</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Le fil rouge : un gestionnaire de tickets</h3>
+        <div class="container">
+            <div class="col" style="flex: 3;">
+                <p>Tout au long du cours, vous allez exposer une application de <strong>tickets de support</strong> sous forme de serveur MCP.</p>
+                <ul>
+                    <li>Un ticket a un <strong>titre</strong>, une <strong>description</strong>, un <strong>statut</strong> (<code>open</code> ou <code>closed</code>) et un éventuel <strong>assigné</strong></li>
+                    <li>Données stockées dans SQLite</li>
+                    <li>Code métier fourni : vous écrivez uniquement la partie MCP</li>
+                </ul>
+            </div>
+            <div class="col" style="flex: 2;">
+                <pre><code class="language-none">tickets/
+├── composer.json
+├── schema.sql
+├── server.php
+└── src/
+    └── TicketRepository.php</code></pre>
+            </div>
+        </div>
+        <p>Objectif final : un modèle capable de lister, trier, assigner et fermer des tickets, avec un tableau de bord interactif.</p>
+    </section>
+
+    <section>
+        <h3>Code de départ : <code>composer.json</code> et <code>server.php</code></h3>
+        <div class="tabs-container">
+            <ul class="tabs-buttons-container">
+                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
+            </ul>
+            <div class="tabs">
+                <div class="tab-php active">
+                    <div class="container">
+                        <div class="col" style="flex: 2;">
+                            <pre><code class="language-json">{
+    "autoload": {
+        "psr-4": { "App\\": "src/" }
+    }
+}</code></pre>
+                        </div>
+                        <div class="col" style="flex: 3;">
+                            <pre class="line-numbers"><code class="language-php">&lt;?php
+
+require __DIR__ . '/vendor/autoload.php';
+
+use Mcp\Server;
+use Mcp\Server\Transport\StdioTransport;
+
+exit(Server::builder()
+    -&gt;setServerInfo('Tickets', '1.0.0')
+    -&gt;setDiscovery(__DIR__, ['src'])
+    -&gt;build()
+    -&gt;run(new StdioTransport()));</code></pre>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section>
+        <h3>Code de départ : <code>schema.sql</code></h3>
+        <p>Le schéma et quelques tickets d'exemple. Les instructions sont rejouables : le dépôt les exécute à chaque démarrage.</p>
+        <pre style="font-size: 0.5em;"><code class="language-sql">CREATE TABLE IF NOT EXISTS tickets (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    title TEXT NOT NULL,
+    description TEXT NOT NULL,
+    status TEXT NOT NULL DEFAULT 'open',
+    assignee TEXT
+);
+
+INSERT OR IGNORE INTO tickets (id, title, description, status, assignee) VALUES
+    (1, 'Connexion impossible', 'Le client ne parvient plus à se connecter depuis la mise à jour.', 'open', NULL),
+    (2, 'Facture en double', 'La facture de septembre a été envoyée deux fois.', 'open', 'alice'),
+    (3, 'Export CSV vide', 'Le fichier exporté ne contient que les en-têtes.', 'closed', 'bob');</code></pre>
+    </section>
+
+    <section>
+        <h3>Code de départ : <code>TicketRepository</code></h3>
+        <p>Le dépôt renvoie de simples tableaux associatifs, que le SDK sait convertir en JSON.</p>
+        <div class="tabs-container">
+            <ul class="tabs-buttons-container">
+                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
+            </ul>
+            <div class="tabs">
+                <div class="tab-php active">
+                    <pre style="font-size: 0.45em;" class="line-numbers"><code class="language-php">&lt;?php
+
+namespace App;
+
+use PDO;
+
+class TicketRepository
+{
+    private PDO $pdo;
+
+    public function __construct()
+    {
+        $this-&gt;pdo = new PDO('sqlite:' . __DIR__ . '/../tickets.sqlite');
+        $this-&gt;pdo-&gt;setAttribute(PDO::ATTR_DEFAULT_FETCH_MODE, PDO::FETCH_ASSOC);
+        $this-&gt;pdo-&gt;exec(file_get_contents(__DIR__ . '/../schema.sql'));
+    }
+
+    public function findAll(?string $status = null): array
+    {
+        $query = $this-&gt;pdo-&gt;prepare('SELECT * FROM tickets WHERE :status IS NULL OR status = :status');
+        $query-&gt;execute(['status' =&gt; $status]);
+        return $query-&gt;fetchAll();
+    }</code></pre>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section>
+        <h3>Code de départ : <code>TicketRepository</code></h3>
+        <div class="tabs-container">
+            <ul class="tabs-buttons-container">
+                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
+            </ul>
+            <div class="tabs">
+                <div class="tab-php active">
+                    <pre style="font-size: 0.45em;" data-start="24" class="line-numbers"><code class="language-php">    public function find(int $id): ?array
+    {
+        $query = $this-&gt;pdo-&gt;prepare('SELECT * FROM tickets WHERE id = ?');
+        $query-&gt;execute([$id]);
+        return $query-&gt;fetch() ?: null;
+    }
+
+    public function create(string $title, string $description): array
+    {
+        $this-&gt;pdo-&gt;prepare('INSERT INTO tickets (title, description) VALUES (?, ?)')
+            -&gt;execute([$title, $description]);
+        return $this-&gt;find((int) $this-&gt;pdo-&gt;lastInsertId());
+    }
+
+    public function assign(int $id, string $assignee): void
+    {
+        $this-&gt;pdo-&gt;prepare('UPDATE tickets SET assignee = ? WHERE id = ?')-&gt;execute([$assignee, $id]);
+    }
+
+    public function close(int $id): void
+    {
+        $this-&gt;pdo-&gt;prepare("UPDATE tickets SET status = 'closed' WHERE id = ?")-&gt;execute([$id]);
+    }
+}</code></pre>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section>
+        <h3>Exercice</h3>
+        <div class="instructions">
+            <ol>
+                <li>Créez le serveur <code>Calculator</code> avec le SDK et appelez <code>add</code> depuis l'Inspector.</li>
+                <li>Retrouvez dans l'historique de l'Inspector le <code>inputSchema</code> généré et les messages <code>initialize</code>.</li>
+                <li>Créez le projet <code>tickets</code> avec les fichiers de départ, puis installez les dépendances.</li>
+                <li>Vérifiez avec <code>php -r</code> que <code>TicketRepository</code> liste bien 3 tickets.</li>
+                <li>Lancez le serveur <code>tickets</code> dans l'Inspector : il ne propose encore aucun tool.</li>
+            </ol>
+        </div>
+    </section>
+
+</section>

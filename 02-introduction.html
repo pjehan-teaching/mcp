@@ -1,0 +1,283 @@
+<section id="introduction">
+
+    <section>
+        <h2>Pourquoi MCP</h2>
+    </section>
+
+    <section>
+        <h3>Un modèle isolé</h3>
+        <p>Un modèle de langage ne connaît que ses <strong>données d'entraînement</strong> et le contenu de la conversation.</p>
+        <p>Pour être vraiment utile, il doit pouvoir :</p>
+        <ul>
+            <li><strong>lire</strong> des données à jour : fichiers, base de données, tickets, documentation…</li>
+            <li><strong>agir</strong> sur des systèmes externes : créer un ticket, envoyer un e-mail, ouvrir une pull request…</li>
+        </ul>
+        <p>Chaque application d'IA a longtemps développé ses propres <strong>connecteurs</strong> vers chaque service.</p>
+    </section>
+
+    <section>
+        <h3>Le problème N×M</h3>
+        <div class="container">
+            <div class="col">
+                <h4>Sans protocole commun</h4>
+                <p>Chaque application d'IA intègre chaque service à sa façon.</p>
+                <p>4 applications × 10 services = <strong>40 intégrations</strong> à écrire et maintenir.</p>
+            </div>
+            <div class="col">
+                <h4>Avec MCP</h4>
+                <p>Chaque application implémente un <strong>client</strong>, chaque service un <strong>serveur</strong>.</p>
+                <p>4 clients + 10 serveurs = <strong>14 implémentations</strong>, toutes compatibles entre elles.</p>
+            </div>
+        </div>
+        <p><mark>Un serveur MCP écrit une fois fonctionne dans tous les hosts compatibles.</mark></p>
+    </section>
+
+    <section>
+        <h3>Model Context Protocol</h3>
+        <p>MCP est un <strong>standard ouvert</strong> pour connecter des applications d'IA à des systèmes externes : sources de données, services et workflows.</p>
+        <ul>
+            <li>Créé par <strong>Anthropic</strong>, publié en open source le <strong>25 novembre 2024</strong></li>
+            <li>Spécification versionnée par date : <code>2024-11-05</code>, <code>2025-03-26</code>, <code>2025-06-18</code>, <code>2025-11-25</code>, <code>2026-07-28</code></li>
+            <li>Évolutions proposées et discutées publiquement sous forme de <strong>SEP</strong> (Specification Enhancement Proposals)</li>
+        </ul>
+        <blockquote>
+            <p>“Think of MCP like a USB-C port for AI applications.”</p>
+            <cite>- modelcontextprotocol.io</cite>
+        </blockquote>
+        <footer>
+            <a href="https://modelcontextprotocol.io/docs/getting-started/intro" target="_blank" class="info">What is MCP?</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Un écosystème</h3>
+        <div class="container">
+            <div class="col">
+                <h4>Hosts</h4>
+                <ul>
+                    <li>Claude (web, Desktop, Code)</li>
+                    <li>ChatGPT</li>
+                    <li>VS Code + GitHub Copilot</li>
+                    <li>Cursor, Goose, Postman…</li>
+                </ul>
+            </div>
+            <div class="col">
+                <h4>SDK officiels</h4>
+                <table>
+                    <thead>
+                        <tr><th>Niveau</th><th>Langages</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td>1</td><td>TypeScript, Python, C#, Go, Rust</td></tr>
+                        <tr><td>2</td><td>Java, Ruby</td></tr>
+                        <tr><td>3</td><td>Swift, PHP, Kotlin</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <p>Le niveau d'un SDK reflète sa complétude, son support du protocole et l'engagement de maintenance.</p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/docs/2026-07-28/sdk" target="_blank" class="info">SDKs</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Architecture : host, client, serveur</h3>
+        <ul>
+            <li><strong>Host</strong> : l'application utilisée par l'utilisateur, qui embarque le modèle (VS Code, Claude Desktop…)</li>
+            <li><strong>Client</strong> : composant du host qui maintient la connexion avec <strong>un</strong> serveur</li>
+            <li><strong>Serveur</strong> : programme qui expose des fonctionnalités et des données au client</li>
+        </ul>
+        <pre><code class="language-none">┌───────── Host (VS Code) ─────────┐
+│                                  │
+│  Modèle ─┬─ Client 1 ────────────┼──► Serveur filesystem (local, stdio)
+│          ├─ Client 2 ────────────┼──► Serveur GitHub (distant, HTTP)
+│          └─ Client 3 ────────────┼──► Serveur tickets (local, stdio)
+│                                  │
+└──────────────────────────────────┘</code></pre>
+        <p>Le host crée <strong>un client par serveur</strong> connecté.</p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/docs/2026-07-28/learn/architecture" target="_blank" class="info">Architecture overview</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Serveurs locaux et distants</h3>
+        <table>
+            <thead>
+                <tr><th></th><th>Serveur local</th><th>Serveur distant</th></tr>
+            </thead>
+            <tbody>
+                <tr><td>Transport</td><td><strong>stdio</strong></td><td><strong>Streamable HTTP</strong></td></tr>
+                <tr><td>Lancement</td><td>Le host lance le serveur comme sous-processus</td><td>Le serveur tourne en continu sur une autre machine</td></tr>
+                <tr><td>Clients</td><td>Généralement un seul</td><td>Potentiellement des milliers</td></tr>
+                <tr><td>Exemple</td><td>Accès au système de fichiers</td><td>Serveur MCP de GitHub ou de Sentry</td></tr>
+            </tbody>
+        </table>
+        <p>Le protocole est le même : seule la <strong>couche transport</strong> change.</p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/basic/transports" target="_blank" class="info">Transports</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Deux couches</h3>
+        <div class="container">
+            <div class="col">
+                <h4>Couche données</h4>
+                <ul>
+                    <li>Messages <strong>JSON-RPC 2.0</strong></li>
+                    <li>Découverte du serveur</li>
+                    <li>Primitives : tools, resources, prompts</li>
+                    <li>Elicitation, notifications</li>
+                </ul>
+            </div>
+            <div class="col">
+                <h4>Couche transport</h4>
+                <ul>
+                    <li><strong>stdio</strong> : entrée et sortie standard</li>
+                    <li><strong>Streamable HTTP</strong> : requêtes POST</li>
+                    <li>Autorisation (HTTP uniquement)</li>
+                </ul>
+            </div>
+        </div>
+        <p><mark>Les mêmes messages JSON-RPC circulent quel que soit le transport.</mark></p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/docs/2026-07-28/learn/architecture" target="_blank" class="info">Architecture overview</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Les primitives serveur</h3>
+        <table>
+            <thead>
+                <tr><th>Primitive</th><th>Contrôlée par</th><th>Exemple</th><th>Méthodes</th></tr>
+            </thead>
+            <tbody>
+                <tr><td><strong>Tool</strong></td><td>le modèle</td><td><code>create_ticket</code></td><td><code>tools/list</code>, <code>tools/call</code></td></tr>
+                <tr><td><strong>Resource</strong></td><td>l'application</td><td><code>ticket://42</code></td><td><code>resources/list</code>, <code>resources/read</code></td></tr>
+                <tr><td><strong>Prompt</strong></td><td>l'utilisateur</td><td><code>triage_tickets</code></td><td><code>prompts/list</code>, <code>prompts/get</code></td></tr>
+            </tbody>
+        </table>
+        <ul>
+            <li>Un <strong>tool</strong> est une action que le modèle décide d'appeler</li>
+            <li>Une <strong>resource</strong> est une donnée identifiée par une URI, que le host ajoute au contexte</li>
+            <li>Un <strong>prompt</strong> est un modèle de message que l'utilisateur choisit, souvent sous forme de commande <code>/</code></li>
+        </ul>
+        <footer>
+            <a href="https://modelcontextprotocol.io/docs/2026-07-28/learn/server-concepts" target="_blank" class="info">Understanding MCP servers</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Côté client : l'elicitation</h3>
+        <p>Un serveur peut avoir besoin d'une information de l'utilisateur <strong>pendant</strong> le traitement d'une requête :</p>
+        <ul>
+            <li>confirmer une action destructrice</li>
+            <li>compléter une information manquante</li>
+            <li>choisir parmi plusieurs options</li>
+        </ul>
+        <p>C'est l'<strong>elicitation</strong> : le serveur formule la demande, le client l'affiche à l'utilisateur et renvoie sa réponse.</p>
+        <p>D'autres fonctionnalités client existent encore (<em>Sampling</em>, <em>Roots</em>, <em>Logging</em>) mais sont <strong>dépréciées</strong> depuis <code>2026-07-28</code>.</p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/docs/2026-07-28/learn/client-concepts" target="_blank" class="info">Understanding MCP clients</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Quiz</h3>
+        <p>Qui décide d'appeler un tool ?</p>
+        <form action="#" class="quiz-form">
+            <div class="quiz-options">
+                <div class="quiz-option">
+                    <input type="radio" name="tool-controller" value="Utilisateur" id="input-tool-user">
+                    <label for="input-tool-user">L'utilisateur</label>
+                </div>
+                <div class="quiz-option">
+                    <input type="radio" name="tool-controller" value="Modèle" id="input-tool-model">
+                    <label for="input-tool-model">Le modèle</label>
+                </div>
+                <div class="quiz-option">
+                    <input type="radio" name="tool-controller" value="Serveur" id="input-tool-server">
+                    <label for="input-tool-server">Le serveur</label>
+                </div>
+                <div class="quiz-option">
+                    <input type="radio" name="tool-controller" value="Host" id="input-tool-host">
+                    <label for="input-tool-host">Le host</label>
+                </div>
+            </div>
+            <button type="submit">Valider</button>
+        </form>
+    </section>
+
+    <section>
+        <h3>L'environnement du cours</h3>
+        <table>
+            <thead>
+                <tr><th>Logiciel</th><th>Rôle</th></tr>
+            </thead>
+            <tbody>
+                <tr><td><strong>MCP Inspector</strong></td><td>Tester un serveur à la main et lire les messages échangés (Node.js 22.19 ou plus)</td></tr>
+                <tr><td><strong>VS Code + GitHub Copilot</strong></td><td>Host avec un modèle : le mode agent appelle les tools des serveurs configurés</td></tr>
+                <tr><td><strong>PHP 8.2+ et Composer</strong></td><td>Écrire nos serveurs avec le SDK officiel <code>mcp/sdk</code></td></tr>
+            </tbody>
+        </table>
+        <pre><code class="language-bash">npx @modelcontextprotocol/inspector</code></pre>
+        <footer>
+            <a href="https://modelcontextprotocol.io/docs/2026-07-28/tools/inspector" target="_blank" class="info">MCP Inspector</a>
+            <a href="https://code.visualstudio.com/docs/copilot/customization/mcp-servers" target="_blank" class="info">MCP servers in VS Code</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Brancher un serveur dans VS Code</h3>
+        <p>Le fichier <code>.vscode/mcp.json</code> déclare les serveurs du projet :</p>
+        <pre><code class="language-json">{
+    "servers": {
+        "filesystem": {
+            "command": "npx",
+            "args": ["-y", "@modelcontextprotocol/server-filesystem", "${workspaceFolder}"]
+        }
+    }
+}</code></pre>
+        <ul>
+            <li><code>command</code> et <code>args</code> : la commande qui lance un serveur local (stdio)</li>
+            <li>Un serveur distant se déclare avec <code>"type": "http"</code> et <code>"url"</code></li>
+            <li>La commande <strong>MCP: List Servers</strong> permet de démarrer, arrêter et consulter les logs d'un serveur</li>
+        </ul>
+        <footer>
+            <a href="https://code.visualstudio.com/docs/copilot/customization/mcp-servers" target="_blank" class="info">MCP servers in VS Code</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Observer avec l'Inspector</h3>
+        <p>L'Inspector lance le serveur et se comporte comme un client, sans modèle :</p>
+        <pre><code class="language-bash">npx @modelcontextprotocol/inspector npx -y @modelcontextprotocol/server-filesystem .</code></pre>
+        <ul>
+            <li>onglet <strong>Tools</strong> : lister les tools et les appeler avec un formulaire</li>
+            <li>onglets <strong>Resources</strong> et <strong>Prompts</strong> : les autres primitives</li>
+            <li>historique des échanges : chaque requête et chaque réponse JSON-RPC</li>
+        </ul>
+        <p>Il existe aussi en ligne de commande (<code>--cli</code>) et en interface terminal (<code>--tui</code>).</p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/docs/2026-07-28/tools/inspector" target="_blank" class="info">MCP Inspector</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Exercice</h3>
+        <p>Vous allez brancher le serveur officiel <strong>filesystem</strong> dans VS Code, puis observer les mêmes échanges dans l'Inspector.</p>
+        <div class="instructions">
+            <ol>
+                <li>Installez Node.js 22.19+, VS Code et GitHub Copilot.</li>
+                <li>Ouvrez dans VS Code un dossier contenant un <code>README.md</code>.</li>
+                <li>Déclarez le serveur filesystem dans <code>.vscode/mcp.json</code>.</li>
+                <li>En mode agent, demandez : « Résume le README du projet ». Observez les tools appelés.</li>
+                <li>Dans l'Inspector, appelez <code>list_directory</code> puis <code>read_text_file</code>.</li>
+                <li>Qui a choisi les tools et leurs arguments dans chaque cas ?</li>
+            </ol>
+        </div>
+    </section>
+
+</section>

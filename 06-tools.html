@@ -1,0 +1,382 @@
+<section id="tools">
+
+    <section>
+        <h2>Tools</h2>
+    </section>
+
+    <section>
+        <h3>Rappel : un tool</h3>
+        <p>Un tool est une <strong>fonction exposée par le serveur</strong>, que le modèle décide d'appeler avec des arguments.</p>
+        <ul>
+            <li><code>tools/list</code> : le client récupère la liste des tools et la transmet au modèle</li>
+            <li><code>tools/call</code> : le client exécute l'appel choisi par le modèle</li>
+            <li>Le résultat est renvoyé au modèle, qui poursuit sa réponse</li>
+        </ul>
+        <p><mark>Un humain doit toujours pouvoir refuser l'appel d'un tool</mark> : les hosts affichent les tools utilisés et demandent confirmation pour les opérations sensibles.</p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/server/tools" target="_blank" class="info">Tools</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Définition d'un tool</h3>
+        <pre style="font-size: 0.5em;"><code class="language-json">{
+  "name": "list_tickets",
+  "description": "Liste les tickets de support, éventuellement filtrés par statut.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "status": { "type": ["null", "string"], "default": null, "enum": ["open", "closed"] }
+    }
+  },
+  "annotations": { "readOnlyHint": true }
+}</code></pre>
+        <ul>
+            <li><code>name</code> : identifiant unique ; <code>title</code> : nom affiché ; <code>description</code> : ce que fait le tool</li>
+            <li><code>inputSchema</code> : JSON Schema des arguments ; <code>outputSchema</code> : schéma du résultat structuré</li>
+            <li><code>annotations</code> : indications sur le comportement du tool</li>
+        </ul>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/server/tools#tool" target="_blank" class="info">Tool</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Déclarer un tool avec le SDK</h3>
+        <div class="tabs-container">
+            <ul class="tabs-buttons-container">
+                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
+            </ul>
+            <div class="tabs">
+                <div class="tab-php active">
+                    <pre style="font-size: 0.45em;" data-line="12-14,19" class="line-numbers"><code class="language-php">&lt;?php
+
+namespace App;
+
+use Mcp\Capability\Attribute\McpTool;
+use Mcp\Capability\Attribute\Schema;
+use Mcp\Exception\ToolCallException;
+use Mcp\Schema\ToolAnnotations;
+
+class TicketTools
+{
+    public function __construct(private TicketRepository $tickets)
+    {
+    }
+
+    /**
+     * Liste les tickets de support, éventuellement filtrés par statut.
+     */
+    #[McpTool(name: 'list_tickets', annotations: new ToolAnnotations(readOnlyHint: true))]
+    public function list(#[Schema(enum: ['open', 'closed'])] ?string $status = null): array
+    {
+        return ['tickets' =&gt; $this-&gt;tickets-&gt;findAll($status)];
+    }</code></pre>
+                </div>
+            </div>
+        </div>
+        <p>Le conteneur du SDK instancie <code>TicketRepository</code> et l'injecte dans le constructeur.</p>
+    </section>
+
+    <section>
+        <h3>Enrichir le schéma : <code>#[Schema]</code></h3>
+        <p>L'attribut <code>#[Schema]</code> ajoute des contraintes, vérifiées par le SDK à chaque appel :</p>
+        <div class="tabs-container">
+            <ul class="tabs-buttons-container">
+                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
+            </ul>
+            <div class="tabs">
+                <div class="tab-php active">
+                    <pre><code class="language-php">public function create(
+    #[Schema(minLength: 5, description: 'Résumé du problème')] string $title,
+    string $description,
+    #[Schema(format: 'email')] ?string $reporterEmail = null,
+): array</code></pre>
+                </div>
+            </div>
+        </div>
+        <table>
+            <thead>
+                <tr><th>Contrainte</th><th>Exemples</th></tr>
+            </thead>
+            <tbody>
+                <tr><td>Chaînes</td><td><code>minLength</code>, <code>maxLength</code>, <code>pattern</code>, <code>format</code></td></tr>
+                <tr><td>Nombres</td><td><code>minimum</code>, <code>maximum</code>, <code>multipleOf</code></td></tr>
+                <tr><td>Valeurs possibles</td><td><code>enum</code></td></tr>
+                <tr><td>Documentation</td><td><code>description</code></td></tr>
+            </tbody>
+        </table>
+        <footer>
+            <a href="https://github.com/modelcontextprotocol/php-sdk/blob/main/docs/servers/schemas.md" target="_blank" class="info">SDK : Schema generation</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>La description compte</h3>
+        <p>Le modèle choisit ses tools uniquement à partir de leur <strong>nom</strong>, de leur <strong>description</strong> et de leur <strong>schéma</strong>.</p>
+        <div class="container">
+            <div class="col">
+                <h4>À éviter</h4>
+                <ul>
+                    <li><code>process</code> : « Traite les données »</li>
+                    <li>Paramètre <code>$s</code> sans description</li>
+                    <li>Un tool géant avec un argument <code>action</code></li>
+                </ul>
+            </div>
+            <div class="col">
+                <h4>À privilégier</h4>
+                <ul>
+                    <li>Un verbe et un objet : <code>close_ticket</code></li>
+                    <li>Ce que fait le tool, ce qu'il renvoie et quand l'utiliser</li>
+                    <li>Un tool par action, des paramètres typés et contraints</li>
+                </ul>
+            </div>
+        </div>
+        <p><mark>Une description ambiguë produit des appels erronés, quel que soit le modèle.</mark></p>
+    </section>
+
+    <section>
+        <h3>Le résultat d'un tool</h3>
+        <ul>
+            <li><code>content</code> : contenus pour le modèle (<code>text</code>, <code>image</code>, <code>audio</code>, <code>resource_link</code>…)</li>
+            <li><code>structuredContent</code> : valeur JSON conforme à l'<code>outputSchema</code></li>
+            <li><code>isError</code> : <code>true</code> si le tool a échoué</li>
+        </ul>
+        <table>
+            <thead>
+                <tr><th>Valeur PHP</th><th>Résultat</th></tr>
+            </thead>
+            <tbody>
+                <tr><td><code>string</code>, <code>int</code>, <code>bool</code></td><td><code>content</code> texte</td></tr>
+                <tr><td>tableau associatif, objet</td><td><code>content</code> JSON <strong>et</strong> <code>structuredContent</code></td></tr>
+                <tr><td>liste (<code>[1, 2, 3]</code>)</td><td><code>structuredContent</code> seulement en ère <code>modern</code> : enveloppez-la dans une clé</td></tr>
+            </tbody>
+        </table>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/server/tools#tool-result" target="_blank" class="info">Tool result</a>
+            <a href="https://github.com/modelcontextprotocol/php-sdk/blob/main/docs/servers/tools.md" target="_blank" class="info">SDK : Tools</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Déclarer le résultat : <code>outputSchema</code></h3>
+        <div class="tabs-container">
+            <ul class="tabs-buttons-container">
+                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
+            </ul>
+            <div class="tabs">
+                <div class="tab-php active">
+                    <pre style="font-size: 0.45em;" data-line="31-39" data-start="25" class="line-numbers"><code class="language-php">    /**
+     * Récupère le détail d'un ticket.
+     */
+    #[McpTool(
+        name: 'get_ticket',
+        annotations: new ToolAnnotations(readOnlyHint: true),
+        outputSchema: [
+            'type' =&gt; 'object',
+            'properties' =&gt; [
+                'id' =&gt; ['type' =&gt; 'integer'],
+                'title' =&gt; ['type' =&gt; 'string'],
+                'status' =&gt; ['type' =&gt; 'string', 'enum' =&gt; ['open', 'closed']],
+            ],
+            'required' =&gt; ['id', 'title', 'status'],
+        ],
+    )]
+    public function get(int $id): array
+    {
+        return $this-&gt;tickets-&gt;find($id) ?? throw new ToolCallException("Le ticket #$id n'existe pas.");
+    }</code></pre>
+                </div>
+            </div>
+        </div>
+        <p>Le serveur <strong>doit</strong> renvoyer un <code>structuredContent</code> conforme au schéma déclaré.</p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/server/tools#output-schema" target="_blank" class="info">Output schema</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Les annotations</h3>
+        <table>
+            <thead>
+                <tr><th>Annotation</th><th>Signification</th></tr>
+            </thead>
+            <tbody>
+                <tr><td><code>readOnlyHint</code></td><td>Le tool ne modifie rien</td></tr>
+                <tr><td><code>destructiveHint</code></td><td>Le tool peut supprimer ou écraser des données</td></tr>
+                <tr><td><code>idempotentHint</code></td><td>Répéter l'appel avec les mêmes arguments n'a pas d'effet supplémentaire</td></tr>
+                <tr><td><code>openWorldHint</code></td><td>Le tool interagit avec des entités extérieures (web, API tierces…)</td></tr>
+            </tbody>
+        </table>
+        <p>Les hosts s'en servent par exemple pour demander confirmation avant un tool destructeur.</p>
+        <p><mark>Ce sont des indications, pas des garanties</mark> : un client doit les considérer comme non fiables si le serveur n'est pas de confiance.</p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/server/tools#tool" target="_blank" class="warning">Tool annotations</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Deux types d'erreurs</h3>
+        <div class="container">
+            <div class="col">
+                <h4>Erreur de protocole</h4>
+                <p>Tool inconnu, requête mal formée, erreur serveur.</p>
+                <p>Réponse JSON-RPC <code>error</code>, peu exploitable par le modèle.</p>
+                <p>Dans le SDK : toute exception, avec un message générique.</p>
+            </div>
+            <div class="col">
+                <h4>Erreur d'exécution</h4>
+                <p>Ticket introuvable, règle métier, API indisponible.</p>
+                <pre style="font-size: 0.5em;"><code class="language-json">{
+  "resultType": "complete",
+  "content": [{ "type": "text", "text": "Le ticket #42 n'existe pas." }],
+  "isError": true
+}</code></pre>
+                <p>Dans le SDK : <code>ToolCallException</code>.</p>
+            </div>
+        </div>
+        <p><mark>Une erreur d'exécution explicite permet au modèle de se corriger et de réessayer.</mark></p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/server/tools#error-handling" target="_blank" class="info">Error handling</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3><code>TicketTools</code> : création et assignation</h3>
+        <div class="tabs-container">
+            <ul class="tabs-buttons-container">
+                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
+            </ul>
+            <div class="tabs">
+                <div class="tab-php active">
+                    <pre style="font-size: 0.5em;" data-start="46" class="line-numbers"><code class="language-php">    /**
+     * Crée un ticket de support.
+     */
+    #[McpTool(name: 'create_ticket')]
+    public function create(#[Schema(minLength: 5)] string $title, string $description): array
+    {
+        return $this-&gt;tickets-&gt;create($title, $description);
+    }
+
+    /**
+     * Assigne un ticket à un membre du support.
+     */
+    #[McpTool(name: 'assign_ticket', annotations: new ToolAnnotations(idempotentHint: true))]
+    public function assign(int $id, string $assignee): string
+    {
+        $this-&gt;get($id);
+        $this-&gt;tickets-&gt;assign($id, $assignee);
+        return "Ticket #$id assigné à $assignee.";
+    }</code></pre>
+                </div>
+            </div>
+        </div>
+        <p><code>assign()</code> appelle <code>get()</code> pour signaler un ticket inexistant par une <code>ToolCallException</code>.</p>
+    </section>
+
+    <section>
+        <h3><code>TicketTools</code> : fermeture</h3>
+        <div class="tabs-container">
+            <ul class="tabs-buttons-container">
+                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
+            </ul>
+            <div class="tabs">
+                <div class="tab-php active">
+                    <pre data-line="69" data-start="66" class="line-numbers"><code class="language-php">    /**
+     * Ferme un ticket résolu.
+     */
+    #[McpTool(name: 'close_ticket', annotations: new ToolAnnotations(destructiveHint: true))]
+    public function close(int $id): string
+    {
+        $this-&gt;get($id);
+        $this-&gt;tickets-&gt;close($id);
+        return "Ticket #$id fermé.";
+    }
+}</code></pre>
+                </div>
+            </div>
+        </div>
+        <p>Fermer un ticket est une action <strong>destructrice</strong> : nous ajouterons une confirmation de l'utilisateur au chapitre MRTR et elicitation.</p>
+    </section>
+
+    <section>
+        <h3>Tester les tools</h3>
+        <p>Dans l'Inspector, testez les cas nominaux <strong>et</strong> les cas d'erreur :</p>
+        <div class="tabs-container">
+            <ul class="tabs-buttons-container">
+                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
+            </ul>
+            <div class="tabs">
+                <div class="tab-php active">
+                    <pre><code class="language-bash">npx @modelcontextprotocol/inspector --cli php server.php --method tools/call \
+  --tool-name get_ticket --tool-arg id=2</code></pre>
+                </div>
+            </div>
+        </div>
+        <ul>
+            <li><code>get_ticket</code> avec un identifiant inexistant : <code>isError: true</code></li>
+            <li><code>create_ticket</code> avec un titre de 3 caractères : arguments rejetés par le schéma</li>
+            <li><code>list_tickets</code> avec <code>status = open</code></li>
+        </ul>
+        <footer>
+            <a href="https://modelcontextprotocol.io/docs/2026-07-28/tools/inspector/cli" target="_blank" class="info">Inspector CLI</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Brancher le serveur dans VS Code</h3>
+        <pre><code class="language-json">{
+    "servers": {
+        "tickets": {
+            "type": "stdio",
+            "command": "php",
+            "args": ["${workspaceFolder}/server.php"]
+        }
+    }
+}</code></pre>
+        <p>Dans le chat de Copilot, en mode agent :</p>
+        <ul>
+            <li>« Quels tickets sont ouverts ? »</li>
+            <li>« Assigne le ticket de facturation à alice »</li>
+            <li>« Crée un ticket : l'export PDF plante sur les factures de plus de 100 lignes »</li>
+        </ul>
+        <p>Observez les tools choisis, leurs arguments et les demandes de confirmation.</p>
+        <footer>
+            <a href="https://code.visualstudio.com/docs/copilot/reference/mcp-configuration" target="_blank" class="info">MCP configuration reference</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Et l'état entre deux appels ?</h3>
+        <p>MCP est sans état : un serveur ne peut pas s'appuyer sur la connexion pour relier deux appels. Il renvoie un <strong>identifiant explicite</strong> que le modèle transmet ensuite :</p>
+        <pre><code class="language-json">// → tools/call
+{ "name": "create_basket", "arguments": {} }
+// ← résultat
+{ "structuredContent": { "basket_id": "bsk_a1b2c3" } }
+// → tools/call
+{ "name": "add_item", "arguments": { "basket_id": "bsk_a1b2c3", "sku": "…" } }</code></pre>
+        <ul>
+            <li>Des identifiants opaques et difficiles à deviner</li>
+            <li>Une durée de vie annoncée dans la description du tool</li>
+            <li>Une erreur d'exécution claire si l'identifiant a expiré</li>
+        </ul>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/server/tools#stateful-tools" target="_blank" class="info">Stateful tools</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Exercice</h3>
+        <p>Exposez le fil rouge sous forme de tools.</p>
+        <div class="instructions">
+            <ol>
+                <li>Créez <code>src/TicketTools.php</code> avec les tools <code>list_tickets</code>, <code>get_ticket</code>, <code>create_ticket</code>, <code>assign_ticket</code> et <code>close_ticket</code>.</li>
+                <li>Testez chaque tool dans l'Inspector, y compris les cas d'erreur.</li>
+                <li>Déclarez le serveur dans <code>.vscode/mcp.json</code> et utilisez-le depuis Copilot.</li>
+                <li>Comparez le comportement de Copilot sur <code>list_tickets</code> et sur <code>close_ticket</code>.</li>
+                <li>Bonus : ajoutez un tool <code>search_tickets</code> qui cherche un texte dans le titre et la description.</li>
+            </ol>
+        </div>
+    </section>
+
+</section>

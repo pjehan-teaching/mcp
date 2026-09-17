@@ -2,6 +2,12 @@
 
 Slides du cours **Model Context Protocol (MCP)**, en français, servies par [revealexpress](https://github.com/pjehan/RevealExpress) (reveal.js + Express).
 
+## Cadre du cours
+
+- `README.md` : plan détaillé (chapitres, durées, objectifs, TP). Un chapitre rédigé couvre tout ce que son plan annonce ; un écart de plan se décide avec l'utilisateur et se reporte dans le README.
+- `CONTEXT.md` : vocabulaire du cours. Emploie ses termes et évite ceux listés en _Avoid_ (ex. « tool », jamais « outil »).
+- `docs/adr/` : décisions structurantes, notamment l'ère `modern` enseignée et l'ère `legacy` réduite à une comparaison.
+
 ## MCP évolue vite : vérifie avant d'écrire
 
 Le protocole publie plusieurs versions par an ; tes connaissances sont probablement en retard. Avant de rédiger ou de modifier une slide sur MCP, **confronte chaque affirmation à la documentation officielle** :
@@ -40,6 +46,8 @@ En cas de doute sur le comportement du serveur ou du client, la référence est 
 - Build **Vite** (`vite.config.mjs`) en mode bibliothèque IIFE, car revealexpress charge les fichiers avec des balises `<script>` et `<link>` classiques déclarées dans `slideshow.config.js` : `src/main.js` → `assets/js/script.js`, styles → `assets/css/style.css`. `assets/` est entièrement régénéré à chaque build et ignoré par git.
 - Images et fichiers statiques : dans `src/public/` (copié tel quel dans `assets/`). `src/public/images/logo.png` se référence `assets/images/logo.png` dans le HTML.
 - `src/js/prism.js` : langages, plugins et thème Prism, importés explicitement. Tout nouveau langage de bloc de code s'y importe **après les langages dont il dépend** (champ `require` de `node_modules/prismjs/components.json`, ex. `markup-templating` avant `php`), puis `npm run build`.
+- Slides en **1280×800** (`revealjs` dans `slideshow.config.js`) et blocs de code limités à 620 px de haut : découpe le code au-delà d'environ 25 lignes.
+- Le SDK PHP 0.8 ne sert l'ère `modern` qu'en HTTP : en stdio, le serveur parle l'ère `legacy`.
 - **reveal.js 6** (thème solarized, `history: true`, `slideNumber: true`, options surchargeables dans la clé `revealjs` de `slideshow.config.js`) : fragments (`fade-up`, `fade-left`…), `data-auto-animate`, `r-stretch`, `r-fit-text`, `r-stack` et les fonds `data-background-*` sont disponibles. Aucun plugin reveal.js n'est enregistré : pas de vue présentateur (les `<aside class="notes">` restent simplement masquées), pas de markdown ni de plugin highlight (Prism s'en charge).
 - L'URL ne reprend que l'`id` de la **slide affichée** : une slide vers laquelle on veut pointer (`href="#/mon-id"`) porte son propre `id`, unique dans tout le slideshow.
 - Script de slide : dans `src/main.js`, `event.detail.Reveal` de l'événement `loaded` est l'**instance** du slideshow (`deck.on('slidechanged', …)`, `deck.getCurrentSlide()`), pas l'objet global `Reveal`.

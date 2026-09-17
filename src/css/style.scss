@@ -12,9 +12,13 @@
         code {
             padding: 0;
         }
+        code {
+            // reveal.js limits code blocks to 400px, sized for its default 700px slide height (slides are 800px here)
+            max-height: 620px;
+        }
         // reveal.js makes <code> scrollable, which clips the Prism line numbers placed on its left
         &.line-numbers {
-            max-height: 400px;
+            max-height: 620px;
             > code {
                 overflow: visible;
                 max-height: none;
@@ -28,6 +32,7 @@
         align-items: flex-start;
         .col {
             flex: 1;
+            min-width: 0;
         }
     }
 

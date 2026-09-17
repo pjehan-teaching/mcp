@@ -1,0 +1,272 @@
+<section id="elicitation">
+
+    <section>
+        <h2>MRTR et elicitation</h2>
+    </section>
+
+    <section>
+        <h3>Demander une information en cours de route</h3>
+        <p>Certains traitements ne peuvent pas aboutir sans l'utilisateur :</p>
+        <ul>
+            <li>confirmer une action <strong>destructrice</strong> : fermer un ticket, supprimer des données</li>
+            <li>compléter une information <strong>manquante</strong> : la priorité d'un nouveau ticket</li>
+            <li>faire un <strong>choix</strong> : plusieurs clients portent le même nom</li>
+        </ul>
+        <p>L'<strong>elicitation</strong> permet au serveur de formuler une demande que le client présente à l'utilisateur, avant de reprendre le traitement.</p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/client/elicitation" target="_blank" class="info">Elicitation</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Ère <code>legacy</code> : le serveur interroge le client</h3>
+        <pre><code class="language-none">Client                                     Serveur
+│ tools/call close_ticket (id 1)              │
+│────────────────────────────────────────────►│
+│                                             │  traitement en cours…
+│ elicitation/create (id 7)                   │
+│◄────────────────────────────────────────────│
+│                                             │  le serveur attend la réponse
+│ réponse (id 7) : action accept              │
+│────────────────────────────────────────────►│
+│ résultat (id 1)                             │
+│◄────────────────────────────────────────────│</code></pre>
+        <ul>
+            <li>Le serveur envoie <strong>sa propre requête</strong> pendant le traitement de <code>tools/call</code></li>
+            <li>La requête d'origine reste <strong>ouverte</strong> jusqu'à la réponse de l'utilisateur</li>
+            <li>Le serveur doit garder l'état du traitement en mémoire, sur la même instance</li>
+        </ul>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2025-11-25/client/elicitation" target="_blank" class="info">Elicitation (2025-11-25)</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Ère <code>modern</code> : Multi Round-Trip Requests</h3>
+        <pre><code class="language-none">Client                                     Serveur
+│ tools/call close_ticket (id 2)              │
+│────────────────────────────────────────────►│
+│                                             │  il manque une confirmation
+│ résultat (id 2) : input_required            │
+│◄────────────────────────────────────────────│
+│                                             │  le serveur ne garde rien en mémoire
+│ tools/call (id 3) + inputResponses          │
+│────────────────────────────────────────────►│
+│ résultat (id 3) : complete                  │
+│◄────────────────────────────────────────────│</code></pre>
+        <ul>
+            <li>Le serveur <strong>répond</strong> qu'il lui manque une information (<code>input_required</code>)</li>
+            <li>Le client recueille la réponse, puis <strong>relance la requête d'origine</strong> avec un nouvel <code>id</code></li>
+            <li>Aucune requête ne reste ouverte : n'importe quelle instance peut traiter la relance</li>
+        </ul>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/basic/patterns/mrtr" target="_blank" class="info">Multi Round-Trip Requests</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>MRTR : la réponse <code>input_required</code></h3>
+        <p>Échange réel capturé sur le fil rouge : l'appel, puis la réponse du serveur.</p>
+        <pre style="font-size: 0.45em;"><code class="language-json">{"jsonrpc": "2.0", "id": 2, "method": "tools/call", "params": {
+  "name": "close_ticket", "arguments": {"id": 2},
+  "_meta": {"io.modelcontextprotocol/protocolVersion": "2026-07-28",
+            "io.modelcontextprotocol/clientCapabilities": {"elicitation": {}}}}}</code></pre>
+        <pre style="font-size: 0.45em;"><code class="language-json">{"jsonrpc": "2.0", "id": 2, "result": {
+  "resultType": "input_required",
+  "inputRequests": {
+    "elicitation_1": {
+      "method": "elicitation/create",
+      "params": {
+        "message": "Fermer le ticket #2 « Facture en double » ?",
+        "requestedSchema": {
+          "type": "object",
+          "properties": {"confirm": {"type": "boolean", "title": "Confirmer la fermeture"}},
+          "required": ["confirm"]
+        }
+      }
+    }
+  }
+}}</code></pre>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/basic/patterns/mrtr#inputrequiredresult" target="_blank" class="info">InputRequiredResult</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>MRTR : la relance</h3>
+        <p>Le client relance la même requête, complétée par <code>inputResponses</code> :</p>
+        <pre><code class="language-json">{"jsonrpc": "2.0", "id": 3, "method": "tools/call", "params": {
+  "name": "close_ticket", "arguments": {"id": 2},
+  "inputResponses": {
+    "elicitation_1": {"action": "accept", "content": {"confirm": true}}
+  },
+  "_meta": {…}}}</code></pre>
+        <p>Le serveur termine le traitement :</p>
+        <pre><code class="language-json">{"jsonrpc": "2.0", "id": 3, "result": {
+  "resultType": "complete",
+  "content": [{"type": "text", "text": "Ticket #2 fermé."}],
+  "isError": false
+}}</code></pre>
+        <p><code>inputResponses</code> reprend les clés de <code>inputRequests</code> (<code>elicitation_1</code>).</p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/basic/patterns/mrtr" target="_blank" class="info">Multi Round-Trip Requests</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3><code>requestState</code></h3>
+        <p>Quand le traitement nécessite plusieurs allers-retours, le serveur peut joindre un <code>requestState</code> à <code>input_required</code> :</p>
+        <ul>
+            <li>une chaîne <strong>opaque</strong>, que le client renvoie telle quelle lors de la relance</li>
+            <li>elle transporte ce que le serveur veut retrouver : réponses précédentes, étape atteinte…</li>
+            <li>elle passe par le client : <mark>elle doit être signée, et elle n'est pas chiffrée</mark></li>
+        </ul>
+        <p>Le SDK PHP la signe avec une clé HMAC, à configurer dès qu'un tool pose plusieurs questions :</p>
+        <div class="tabs-container">
+            <ul class="tabs-buttons-container">
+                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
+            </ul>
+            <div class="tabs">
+                <div class="tab-php active">
+                    <pre><code class="language-php">-&gt;setRequestState($_ENV['MCP_REQUEST_STATE_KEY'], ttl: 600)</code></pre>
+                </div>
+            </div>
+        </div>
+        <footer>
+            <a href="https://github.com/modelcontextprotocol/php-sdk/blob/main/docs/handlers/input-required.md" target="_blank" class="info">SDK : Asking for input</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Elicitation : deux modes</h3>
+        <table>
+            <thead>
+                <tr><th></th><th>Mode <code>form</code></th><th>Mode <code>url</code></th></tr>
+            </thead>
+            <tbody>
+                <tr><td>Principe</td><td>Le client affiche un formulaire</td><td>Le client ouvre une URL externe</td></tr>
+                <tr><td>Données</td><td>Transitent par le client</td><td>Ne transitent <strong>pas</strong> par le client</td></tr>
+                <tr><td>Usage</td><td>Confirmation, choix, informations simples</td><td>Mots de passe, clés d'API, paiement, consentement OAuth</td></tr>
+            </tbody>
+        </table>
+        <p><mark>Un serveur ne doit jamais demander de secret en mode <code>form</code>.</mark></p>
+        <p>L'utilisateur répond par <code>accept</code> (avec un contenu), <code>decline</code> ou <code>cancel</code>.</p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/client/elicitation" target="_blank" class="warning">Elicitation</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Mode <code>form</code> : le schéma</h3>
+        <p>Le schéma se limite à un <strong>objet plat</strong> de propriétés simples :</p>
+        <div class="container">
+            <div class="col">
+                <pre style="font-size: 0.45em;"><code class="language-json">{
+  "type": "object",
+  "properties": {
+    "email": {"type": "string", "format": "email", "title": "E-mail"},
+    "priority": {"type": "string", "enum": ["low", "normal", "high"], "title": "Priorité"},
+    "hours": {"type": "integer", "minimum": 1, "maximum": 40, "title": "Estimation (h)"},
+    "notify": {"type": "boolean", "default": true, "title": "Prévenir le client"}
+  },
+  "required": ["priority"]
+}</code></pre>
+            </div>
+            <div class="col">
+                <table>
+                    <thead>
+                        <tr><th>Type</th><th>Options</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td><code>string</code></td><td><code>format</code> : <code>email</code>, <code>uri</code>, <code>date</code>, <code>date-time</code></td></tr>
+                        <tr><td><code>number</code>, <code>integer</code></td><td><code>minimum</code>, <code>maximum</code></td></tr>
+                        <tr><td><code>boolean</code></td><td><code>default</code></td></tr>
+                        <tr><td><code>enum</code></td><td>choix simple ou multiple</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/client/elicitation#requested-schema" target="_blank" class="info">Requested schema</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Elicitation avec le SDK</h3>
+        <div class="tabs-container">
+            <ul class="tabs-buttons-container">
+                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
+            </ul>
+            <div class="tabs">
+                <div class="tab-php active">
+                    <pre style="font-size: 0.45em;" data-line="77-87" data-start="69" class="line-numbers"><code class="language-php">    /**
+     * Ferme un ticket résolu, après confirmation de l'utilisateur.
+     */
+    #[McpTool(name: 'close_ticket', annotations: new ToolAnnotations(destructiveHint: true))]
+    public function close(RequestContext $context, int $id): string
+    {
+        $ticket = $this-&gt;get($id);
+
+        $answer = $context-&gt;getClientGateway()-&gt;elicit(
+            "Fermer le ticket #$id « {$ticket['title']} » ?",
+            new ElicitationSchema(
+                ['confirm' =&gt; new BooleanSchemaDefinition(title: 'Confirmer la fermeture')],
+                required: ['confirm'],
+            ),
+        );
+
+        if (!$answer-&gt;isAccepted() || !$answer-&gt;content['confirm']) {
+            return "Fermeture du ticket #$id annulée par l'utilisateur.";
+        }
+
+        $this-&gt;tickets-&gt;close($id);
+        return "Ticket #$id fermé.";
+    }
+}</code></pre>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section>
+        <h3>Un code identique pour les deux ères</h3>
+        <p><code>elicit()</code> fonctionne quelle que soit l'ère du client :</p>
+        <ul>
+            <li>ère <code>modern</code> : le SDK renvoie <code>input_required</code>, puis <strong>réexécute la méthode</strong> depuis le début lors de la relance, avec la réponse</li>
+            <li>ère <code>legacy</code> (VS Code aujourd'hui) : le SDK envoie une vraie requête <code>elicitation/create</code> et attend la réponse</li>
+        </ul>
+        <p><mark>Une méthode qui pose une question peut être exécutée plusieurs fois : placez les effets de bord après la dernière question.</mark></p>
+        <p>Ici, <code>get()</code> ne fait que lire : seul <code>close()</code> modifie la base, après la confirmation.</p>
+        <footer>
+            <a href="https://github.com/modelcontextprotocol/php-sdk/blob/main/docs/handlers/input-required.md" target="_blank" class="info">SDK : Asking for input</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Capacités du client</h3>
+        <ul>
+            <li>Un client qui accepte l'elicitation le déclare dans <code>clientCapabilities</code> : <code>{"elicitation": {"form": {}, "url": {}}}</code></li>
+            <li>Un objet vide <code>{"elicitation": {}}</code> équivaut au seul mode <code>form</code></li>
+            <li>Le serveur ne doit pas demander ce que le client ne sait pas fournir : le SDK répond alors par l'erreur <code>-32021</code></li>
+            <li>Pour proposer une solution de repli, testez <code>$context-&gt;getClientGateway()-&gt;supportsElicitation()</code></li>
+        </ul>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/client/elicitation#capabilities" target="_blank" class="info">Capabilities</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Exercice</h3>
+        <p>Ajoutez une confirmation avant la fermeture d'un ticket.</p>
+        <div class="instructions">
+            <ol>
+                <li>Modifiez <code>close_ticket</code> pour demander confirmation avec <code>elicit()</code> (<code>RequestContext</code> est dans <code>Mcp\Server</code>, les schémas dans <code>Mcp\Schema\Elicitation</code>).</li>
+                <li>Dans VS Code, demandez à Copilot de fermer un ticket : acceptez, refusez puis annulez.</li>
+                <li>Vérifiez dans la base que seul l'accord ferme le ticket.</li>
+                <li>Au chapitre suivant, rejouez le scénario en HTTP avec l'Inspector en ère <code>modern</code> pour observer l'échange MRTR.</li>
+                <li>Bonus : <code>create_ticket</code> demande une priorité (<code>low</code>, <code>normal</code>, <code>high</code>) si elle n'est pas fournie.</li>
+            </ol>
+        </div>
+    </section>
+
+</section>

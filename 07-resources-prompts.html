@@ -1,0 +1,248 @@
+<section id="resources-prompts">
+
+    <section>
+        <h2>Resources et prompts</h2>
+    </section>
+
+    <section>
+        <h3>Resources</h3>
+        <p>Une resource est une <strong>donnée identifiée par une URI</strong>, que le serveur met à disposition en lecture.</p>
+        <ul>
+            <li>Fichiers, enregistrements, schéma d'une base de données, documentation…</li>
+            <li>Contrôlée par <strong>l'application</strong> : le host décide quand l'ajouter au contexte, souvent sur choix de l'utilisateur</li>
+            <li>Contenu texte (<code>text</code>) ou binaire encodé en base64 (<code>blob</code>), avec un <code>mimeType</code></li>
+            <li>URI standard (<code>https://</code>, <code>file://</code>) ou schéma personnalisé (<code>ticket://</code>)</li>
+        </ul>
+        <p>Dans VS Code : <strong>Add Context &gt; MCP Resources</strong>.</p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/server/resources" target="_blank" class="info">Resources</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Resources statiques et templates</h3>
+        <table>
+            <thead>
+                <tr><th></th><th>Resource</th><th>Resource template</th></tr>
+            </thead>
+            <tbody>
+                <tr><td>URI</td><td>fixe : <code>tickets://stats</code></td><td>paramétrée : <code>ticket://{id}</code></td></tr>
+                <tr><td>Découverte</td><td><code>resources/list</code></td><td><code>resources/templates/list</code></td></tr>
+                <tr><td>Lecture</td><td><code>resources/read</code></td><td><code>resources/read</code> avec l'URI complète</td></tr>
+                <tr><td>Attribut du SDK</td><td><code>#[McpResource]</code></td><td><code>#[McpResourceTemplate]</code></td></tr>
+            </tbody>
+        </table>
+        <p>Les templates suivent la syntaxe des <strong>URI templates</strong> (RFC 6570). Leurs variables peuvent être <strong>autocomplétées</strong>.</p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/server/resources#resource-templates" target="_blank" class="info">Resource templates</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Déclarer une resource template</h3>
+        <div class="tabs-container">
+            <ul class="tabs-buttons-container">
+                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
+            </ul>
+            <div class="tabs">
+                <div class="tab-php active">
+                    <pre data-line="19-23" data-start="10" class="line-numbers"><code class="language-php">class TicketResources
+{
+    public function __construct(private TicketRepository $tickets)
+    {
+    }
+
+    /**
+     * Détail complet d'un ticket de support.
+     */
+    #[McpResourceTemplate(uriTemplate: 'ticket://{id}', name: 'ticket', mimeType: 'application/json')]
+    public function ticket(string $id): array
+    {
+        return $this-&gt;tickets-&gt;find((int) $id) ?? throw new ResourceNotFoundException("ticket://$id");
+    }</code></pre>
+                </div>
+            </div>
+        </div>
+        <p>Les variables de l'URI sont liées aux paramètres <strong>par leur nom</strong> ; une variable ne peut pas contenir <code>/</code>.</p>
+    </section>
+
+    <section>
+        <h3>Lire une resource</h3>
+        <p>Réponse à <code>resources/read</code> pour l'URI <code>ticket://2</code> :</p>
+        <pre style="font-size: 0.5em;"><code class="language-json">{
+  "jsonrpc": "2.0",
+  "id": 2,
+  "result": {
+    "resultType": "complete",
+    "contents": [{
+      "uri": "ticket://2",
+      "mimeType": "application/json",
+      "text": "{\"id\": 2, \"title\": \"Facture en double\", \"status\": \"open\", …}"
+    }],
+    "ttlMs": 0,
+    "cacheScope": "private"
+  }
+}</code></pre>
+        <p>Resource inexistante : erreur <code>-32602</code> (SDK : <code>ResourceNotFoundException</code>).</p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/server/resources#error-handling" target="_blank" class="info">Error handling</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Prompts</h3>
+        <p>Un prompt est un <strong>modèle de message paramétré</strong> que le serveur propose à l'utilisateur.</p>
+        <ul>
+            <li>Contrôlé par <strong>l'utilisateur</strong> : il le choisit explicitement, souvent sous forme de commande <code>/</code></li>
+            <li>Arguments facultatifs ou obligatoires, autocomplétés par le serveur</li>
+            <li>Le résultat est une liste de messages, avec les rôles <code>user</code> ou <code>assistant</code> (pas de rôle <code>system</code>)</li>
+            <li>Le contenu est défini par le serveur : il peut embarquer des données fraîches</li>
+        </ul>
+        <p>Dans VS Code : tapez <code>/tickets.triage_tickets</code> dans le chat.</p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/server/prompts" target="_blank" class="info">Prompts</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Déclarer un prompt</h3>
+        <div class="tabs-container">
+            <ul class="tabs-buttons-container">
+                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
+            </ul>
+            <div class="tabs">
+                <div class="tab-php active">
+                    <pre data-line="28-30" data-start="25" class="line-numbers"><code class="language-php">    /**
+     * Trie les tickets ouverts par priorité.
+     */
+    #[McpPrompt(name: 'triage_tickets')]
+    public function triage(
+        #[CompletionProvider(values: ['technique', 'facturation'])] string $focus = 'technique',
+    ): array {
+        $tickets = json_encode($this-&gt;tickets-&gt;findAll('open'), JSON_UNESCAPED_UNICODE);
+
+        return [
+            ['role' =&gt; 'user', 'content' =&gt; "Voici les tickets ouverts : $tickets\n"
+                . "Classe-les du plus urgent au moins urgent (focus : $focus), "
+                . 'puis propose un assigné pour chacun.'],
+        ];
+    }</code></pre>
+                </div>
+            </div>
+        </div>
+        <footer>
+            <a href="https://github.com/modelcontextprotocol/php-sdk/blob/main/docs/servers/prompts.md" target="_blank" class="info">SDK : Prompts</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Obtenir un prompt</h3>
+        <p><code>prompts/get</code> avec <code>{"name": "triage_tickets", "arguments": {"focus": "facturation"}}</code> renvoie :</p>
+        <pre><code class="language-json">{
+  "messages": [{
+    "role": "user",
+    "content": {
+      "type": "text",
+      "text": "Voici les tickets ouverts :\n[…]\n\nClasse-les du plus urgent au moins urgent…"
+    }
+  }]
+}</code></pre>
+        <p>Le host insère ces messages dans la conversation, puis le modèle répond.</p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/server/prompts#getting-a-prompt" target="_blank" class="info">Getting a prompt</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Autocomplétion</h3>
+        <p><code>completion/complete</code> propose des valeurs pour un argument de prompt ou une variable de resource template :</p>
+        <div class="container">
+            <div class="col">
+                <pre><code class="language-json">{
+  "method": "completion/complete",
+  "params": {
+    "ref": { "type": "ref/prompt", "name": "triage_tickets" },
+    "argument": { "name": "focus", "value": "fa" }
+  }
+}</code></pre>
+            </div>
+            <div class="col">
+                <pre><code class="language-json">{
+  "completion": { "values": ["facturation"], "total": 1, "hasMore": false }
+}</code></pre>
+            </div>
+        </div>
+        <p>Le SDK accepte une liste (<code>values</code>), une enum PHP (<code>enum</code>) ou une classe (<code>provider</code>). <mark>Validez toujours les valeurs reçues.</mark></p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/server/utilities/completion" target="_blank" class="info">Completion</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Mettre en cache</h3>
+        <p><code>server/discover</code>, les listes et <code>resources/read</code> indiquent :</p>
+        <ul>
+            <li><code>ttlMs</code> : durée de validité en millisecondes (<code>0</code> : toujours périmée)</li>
+            <li><code>cacheScope</code> : <code>public</code> ou <code>private</code></li>
+        </ul>
+        <div class="tabs-container">
+            <ul class="tabs-buttons-container">
+                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
+            </ul>
+            <div class="tabs">
+                <div class="tab-php active">
+                    <pre><code class="language-php">use Mcp\Schema\Enum\CacheScope;
+use Mcp\Server\Wire\CachePolicy;
+
+Server::builder()
+    // …
+    -&gt;setCachePolicy(
+        CachePolicy::default(30_000)
+            -&gt;withMethod('tools/list', 3_600_000, CacheScope::Public)
+            -&gt;withMethod('server/discover', 3_600_000, CacheScope::Public),
+    )</code></pre>
+                </div>
+            </div>
+        </div>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/server/utilities/caching" target="_blank" class="info">Caching</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Être notifié des changements</h3>
+        <p>Un client ouvre un flux de notifications avec <code>subscriptions/listen</code>, en précisant ce qui l'intéresse :</p>
+        <pre style="font-size: 0.5em;"><code class="language-json">{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "subscriptions/listen",
+  "params": {
+    "_meta": { … },
+    "notifications": {
+      "toolsListChanged": true,
+      "resourceSubscriptions": ["ticket://2"]
+    }
+  }
+}</code></pre>
+        <p>Le serveur confirme par <code>notifications/subscriptions/acknowledged</code>, puis envoie les notifications demandées sur ce flux SSE, qui reste ouvert.</p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/basic/patterns/subscriptions" target="_blank" class="info">Subscriptions</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Exercice</h3>
+        <p>Enrichissez le fil rouge avec une resource et un prompt.</p>
+        <div class="instructions">
+            <ol>
+                <li>Créez <code>src/TicketResources.php</code> avec la resource template <code>ticket://{id}</code>.</li>
+                <li>Lisez <code>ticket://2</code> puis <code>ticket://99</code> dans l'Inspector : observez le contenu et l'erreur.</li>
+                <li>Ajoutez le prompt <code>triage_tickets</code> avec l'autocomplétion de <code>focus</code>.</li>
+                <li>Dans VS Code, ajoutez <code>ticket://1</code> au contexte, puis lancez le prompt avec <code>/</code>.</li>
+                <li>Bonus : une resource statique <code>tickets://stats</code> qui compte les tickets par statut.</li>
+                <li>Bonus : une politique de cache qui garde <code>tools/list</code> une heure.</li>
+            </ol>
+        </div>
+    </section>
+
+</section>

@@ -8,6 +8,8 @@ import 'prismjs/components/prism-json';
 import 'prismjs/components/prism-http';
 import 'prismjs/components/prism-typescript';
 import 'prismjs/components/prism-python';
+import 'prismjs/components/prism-sql';
+import 'prismjs/components/prism-yaml';
 
 // Plugins
 import 'prismjs/plugins/line-numbers/prism-line-numbers';

@@ -1,0 +1,326 @@
+<section id="protocol">
+
+    <section>
+        <h2>Le protocole</h2>
+    </section>
+
+    <section>
+        <h3>JSON-RPC 2.0</h3>
+        <p>Tous les messages MCP suivent la spécification <strong>JSON-RPC 2.0</strong> : un format d'appel de procédure à distance encodé en JSON.</p>
+        <table>
+            <thead>
+                <tr><th>Message</th><th>Champs</th><th>Réponse attendue</th></tr>
+            </thead>
+            <tbody>
+                <tr><td><strong>Requête</strong></td><td><code>jsonrpc</code>, <code>id</code>, <code>method</code>, <code>params</code></td><td>oui, avec le même <code>id</code></td></tr>
+                <tr><td><strong>Réponse</strong></td><td><code>jsonrpc</code>, <code>id</code>, <code>result</code> <strong>ou</strong> <code>error</code></td><td>—</td></tr>
+                <tr><td><strong>Notification</strong></td><td><code>jsonrpc</code>, <code>method</code>, <code>params</code> (pas d'<code>id</code>)</td><td>non</td></tr>
+            </tbody>
+        </table>
+        <ul>
+            <li>L'<code>id</code> est une chaîne ou un entier, jamais <code>null</code></li>
+            <li>Un même émetteur ne réutilise pas un <code>id</code> encore en attente de réponse</li>
+        </ul>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/basic" target="_blank" class="info">Base protocol</a>
+            <a href="https://www.jsonrpc.org/specification" target="_blank" class="info">JSON-RPC 2.0</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>JSON-RPC 2.0</h3>
+        <h4>Réponse en erreur</h4>
+        <pre><code class="language-json">{
+  "jsonrpc": "2.0",
+  "id": 3,
+  "error": {
+    "code": -32601,
+    "message": "Method not found"
+  }
+}</code></pre>
+        <h4>Notification : pas d'<code>id</code>, pas de réponse</h4>
+        <pre><code class="language-json">{
+  "jsonrpc": "2.0",
+  "method": "notifications/progress",
+  "params": { "progressToken": "abc", "progress": 50, "total": 100 }
+}</code></pre>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/basic" target="_blank" class="info">Base protocol</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Un protocole sans état</h3>
+        <p>Depuis <code>2026-07-28</code>, MCP est <strong>sans état</strong> : <mark>toute l'information nécessaire au traitement d'une requête est dans la requête elle-même.</mark></p>
+        <ul>
+            <li>Pas de poignée de main à l'ouverture, pas de session</li>
+            <li>Le serveur ne déduit rien des requêtes précédentes, même sur la même connexion</li>
+            <li>N'importe quelle instance du serveur peut traiter n'importe quelle requête</li>
+            <li>Un état qui dure entre plusieurs requêtes passe par un <strong>identifiant explicite</strong>, par exemple un argument de tool</li>
+        </ul>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/basic#statelessness" target="_blank" class="info">Statelessness</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Les métadonnées <code>_meta</code></h3>
+        <p>Chaque requête transporte sa version et les capacités du client dans <code>params._meta</code> :</p>
+        <pre style="font-size: 0.5em;"><code class="language-json">{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "tools/call",
+  "params": {
+    "name": "get_ticket",
+    "arguments": { "id": 2 },
+    "_meta": {
+      "io.modelcontextprotocol/protocolVersion": "2026-07-28",
+      "io.modelcontextprotocol/clientCapabilities": { "elicitation": {} },
+      "io.modelcontextprotocol/clientInfo": { "name": "example-client", "version": "1.0.0" }
+    }
+  }
+}</code></pre>
+        <p><code>protocolVersion</code> et <code>clientCapabilities</code> sont <strong>obligatoires</strong>, <code>clientInfo</code> est recommandé.</p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/basic#_meta" target="_blank" class="info">_meta</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Le résultat et <code>resultType</code></h3>
+        <pre style="font-size: 0.55em;"><code class="language-json">{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "resultType": "complete",
+    "content": [
+      { "type": "text", "text": "{\"id\": 2, \"title\": \"Facture en double\", \"status\": \"open\"}" }
+    ],
+    "isError": false,
+    "_meta": {
+      "io.modelcontextprotocol/serverInfo": { "name": "Tickets", "version": "1.0.0" }
+    }
+  }
+}</code></pre>
+        <ul>
+            <li><code>resultType</code> est obligatoire : <code>"complete"</code> pour un résultat final, <code>"input_required"</code> quand le serveur attend une information (voir le chapitre MRTR)</li>
+            <li>Un client traite un <code>resultType</code> absent comme <code>"complete"</code> (serveurs plus anciens)</li>
+            <li>Le serveur s'identifie dans <code>_meta</code> avec <code>serverInfo</code></li>
+        </ul>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/basic#resulttype" target="_blank" class="info">ResultType</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Les erreurs</h3>
+        <div class="container">
+            <div class="col">
+                <h4>JSON-RPC</h4>
+                <table>
+                    <thead>
+                        <tr><th>Code</th><th>Signification</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td><code>-32700</code></td><td>JSON invalide</td></tr>
+                        <tr><td><code>-32600</code></td><td>Requête invalide</td></tr>
+                        <tr><td><code>-32601</code></td><td>Méthode inconnue</td></tr>
+                        <tr><td><code>-32602</code></td><td>Paramètres invalides</td></tr>
+                        <tr><td><code>-32603</code></td><td>Erreur interne</td></tr>
+                    </tbody>
+                </table>
+            </div>
+            <div class="col">
+                <h4>MCP</h4>
+                <table>
+                    <thead>
+                        <tr><th>Code</th><th>Signification</th></tr>
+                    </thead>
+                    <tbody>
+                        <tr><td><code>-32020</code></td><td>En-tête HTTP en désaccord avec le corps</td></tr>
+                        <tr><td><code>-32021</code></td><td>Capacité client manquante</td></tr>
+                        <tr><td><code>-32022</code></td><td>Version du protocole non supportée</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+        <p>La plage <code>-32020</code> à <code>-32099</code> est réservée à la spécification MCP.</p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/basic#error-codes" target="_blank" class="info">Error codes</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Découvrir un serveur : <code>server/discover</code></h3>
+        <p>La requête ne contient que les métadonnées <code>_meta</code>. Réponse :</p>
+        <pre><code class="language-json">{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "resultType": "complete",
+    "supportedVersions": ["2026-07-28"],
+    "capabilities": { "tools": {}, "resources": {}, "prompts": {} },
+    "instructions": "Serveur de gestion des tickets de support.",
+    "_meta": {
+      "io.modelcontextprotocol/serverInfo": { "name": "Tickets", "version": "1.0.0" }
+    },
+    "ttlMs": 3600000,
+    "cacheScope": "public"
+  }
+}</code></pre>
+        <p>Obligatoire pour les serveurs, <strong>facultatif</strong> pour les clients.</p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/server/discover" target="_blank" class="info">Discovery</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Transport stdio</h3>
+        <ul>
+            <li>Le client lance le serveur comme <strong>sous-processus</strong></li>
+            <li>Le serveur lit les messages sur <code>stdin</code> et écrit ses messages sur <code>stdout</code></li>
+            <li>Un message JSON par ligne, sans retour à la ligne à l'intérieur</li>
+            <li>Les logs vont sur <code>stderr</code></li>
+        </ul>
+        <pre style="font-size: 0.5em;"><code class="language-json">{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{"_meta":{…}}}
+{"jsonrpc":"2.0","id":1,"result":{"resultType":"complete","tools":[…],"ttlMs":0,"cacheScope":"private"}}</code></pre>
+        <p class="console-error">Un simple <code>echo</code> ou <code>var_dump()</code> dans un serveur stdio corrompt le flux de messages.</p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/stdio" target="_blank" class="info">stdio</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Transport Streamable HTTP</h3>
+        <ul>
+            <li>Le serveur expose <strong>une seule URL</strong> (l'endpoint MCP), qui accepte <code>POST</code></li>
+            <li>Chaque message du client est une requête <code>POST</code> distincte</li>
+            <li>Le serveur répond en <code>application/json</code>, ou en <code>text/event-stream</code> (SSE) pour envoyer des notifications de progression avant la réponse finale</li>
+            <li>Une notification reçue est acquittée par <code>202 Accepted</code>, sans corps</li>
+            <li>Une méthode inconnue renvoie <code>404</code> et l'erreur <code>-32601</code></li>
+        </ul>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http" target="_blank" class="info">Streamable HTTP</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Streamable HTTP : les en-têtes</h3>
+        <p>Des champs du corps sont recopiés en en-têtes pour que les intermédiaires routent sans lire le JSON :</p>
+        <pre style="font-size: 0.5em;"><code class="language-http">POST /mcp HTTP/1.1
+Host: localhost:8000
+Content-Type: application/json
+Accept: application/json, text/event-stream
+MCP-Protocol-Version: 2026-07-28
+Mcp-Method: tools/call
+Mcp-Name: get_ticket
+
+{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "get_ticket", …}}</code></pre>
+        <p><code>MCP-Protocol-Version</code> et <code>Mcp-Method</code> accompagnent toutes les requêtes ; <code>Mcp-Name</code> accompagne <code>tools/call</code>, <code>resources/read</code> et <code>prompts/get</code>.</p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http#request-metadata" target="_blank" class="info">Request metadata</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Streamable HTTP : sécurité</h3>
+        <ul>
+            <li>Le serveur <strong>doit</strong> valider l'en-tête <code>Origin</code> et répondre <code>403</code> s'il est invalide, pour bloquer les attaques par <strong>DNS rebinding</strong></li>
+            <li>En local, le serveur écoute uniquement sur <code>127.0.0.1</code></li>
+            <li>Un serveur distant met en place une <strong>authentification</strong> (voir le chapitre Sécurité)</li>
+        </ul>
+        <p><mark>Sans ces protections, un site web malveillant peut piloter un serveur MCP local depuis le navigateur de l'utilisateur.</mark></p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http" target="_blank" class="warning">Security & Endpoint</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Avant / après : l'ère <code>legacy</code></h3>
+        <p>Avant <code>2026-07-28</code>, client et serveur ouvraient une <strong>session</strong> :</p>
+        <pre style="font-size: 0.55em;"><code class="language-none">→ initialize                { protocolVersion, capabilities, clientInfo }
+← résultat                  { protocolVersion, capabilities, serverInfo }  + Mcp-Session-Id
+→ notifications/initialized
+→ tools/call   (id 1)       { name: "get_ticket", arguments: { id: 2 } }   + Mcp-Session-Id
+← résultat     (id 1)       { content: [ … ] }</code></pre>
+        <p>Depuis <code>2026-07-28</code>, chaque requête est <strong>autonome</strong> :</p>
+        <pre style="font-size: 0.55em;"><code class="language-none">→ tools/call   (id 1)       { name: "get_ticket", arguments: { id: 2 },
+                              _meta: { protocolVersion, clientCapabilities } }
+← résultat     (id 1)       { resultType: "complete", content: [ … ] }</code></pre>
+        <p>Ce qu'expose un serveur ne change pas d'une ère à l'autre ; seul le cycle de vie des échanges diffère.</p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/changelog" target="_blank" class="info">Key changes</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Avant / après : l'ère <code>legacy</code></h3>
+        <table>
+            <thead>
+                <tr><th></th><th><code>legacy</code> (jusqu'à <code>2025-11-25</code>)</th><th><code>modern</code> (<code>2026-07-28</code>)</th></tr>
+            </thead>
+            <tbody>
+                <tr><td>Ouverture</td><td><code>initialize</code> puis <code>notifications/initialized</code></td><td>aucune</td></tr>
+                <tr><td>Version et capacités</td><td>négociées une fois</td><td>envoyées à chaque requête</td></tr>
+                <tr><td>Découverte</td><td>résultat d'<code>initialize</code></td><td><code>server/discover</code></td></tr>
+                <tr><td>Session HTTP</td><td>en-tête <code>Mcp-Session-Id</code></td><td>aucune</td></tr>
+                <tr><td>Serveur → client</td><td>requêtes envoyées par le serveur</td><td><code>input_required</code> (MRTR)</td></tr>
+                <tr><td>Notifications</td><td>flux GET, <code>resources/subscribe</code></td><td><code>subscriptions/listen</code></td></tr>
+            </tbody>
+        </table>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/changelog" target="_blank" class="info">Key changes</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Ce qui a disparu</h3>
+        <ul>
+            <li><strong>Supprimés</strong> : <code>initialize</code>, <code>ping</code>, <code>logging/setLevel</code>, <code>resources/subscribe</code></li>
+            <li><strong>Dépréciés</strong> (encore fonctionnels, à ne plus utiliser) : <em>Roots</em>, <em>Sampling</em> et <em>Logging</em></li>
+            <li><strong>Déplacé</strong> dans une extension officielle : <em>Tasks</em></li>
+        </ul>
+        <p>En septembre 2026, beaucoup de hosts parlent encore l'ère <code>legacy</code>, <strong>VS Code compris</strong>. Les SDK officiels servent les deux ères avec le même code : vous croiserez encore <code>initialize</code> dans les tutoriels et les journaux.</p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/deprecated" target="_blank" class="warning">Deprecated features</a>
+            <a href="https://github.com/microsoft/vscode/issues/329848" target="_blank" class="info">VS Code et 2026-07-28</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Exercice</h3>
+        <p>Voici des échanges capturés entre un client et un serveur (<code>→</code> client vers serveur, <code>←</code> serveur vers client) :</p>
+        <pre style="font-size: 0.45em;"><code class="language-none">→ {"jsonrpc":"2.0","id":1,"method":"server/discover","params":{"_meta":{
+     "io.modelcontextprotocol/protocolVersion":"2026-07-28",
+     "io.modelcontextprotocol/clientCapabilities":{}}}}
+← {"jsonrpc":"2.0","id":1,"result":{"resultType":"complete","supportedVersions":["2026-07-28"],
+     "capabilities":{"tools":{}},"ttlMs":3600000,"cacheScope":"public"}}
+
+→ {"jsonrpc":"2.0","id":2,"method":"tools/call","params":{"name":"get_ticket",
+     "arguments":{"id":42},"_meta":{…}}}
+← {"jsonrpc":"2.0","id":2,"result":{"resultType":"complete","isError":true,
+     "content":[{"type":"text","text":"Le ticket #42 n'existe pas."}]}}
+
+→ {"jsonrpc":"2.0","id":3,"method":"prompts/list","params":{"_meta":{…}}}
+← {"jsonrpc":"2.0","id":3,"error":{"code":-32601,"message":"Method not found"}}
+
+→ {"jsonrpc":"2.0","id":4,"method":"tools/list","params":{"_meta":{
+     "io.modelcontextprotocol/protocolVersion":"2025-06-18", …}}}
+← {"jsonrpc":"2.0","id":4,"error":{"code":-32022,"message":"Unsupported protocol version",
+     "data":{"supported":["2026-07-28"],"requested":"2025-06-18"}}}</code></pre>
+    </section>
+
+    <section>
+        <h3>Exercice</h3>
+        <div class="instructions">
+            <ol>
+                <li>Quelle version du protocole le client utilise-t-il, et quelles capacités le serveur annonce-t-il ?</li>
+                <li>Combien de temps le client peut-il garder en cache la réponse de <code>server/discover</code> ?</li>
+                <li>Pourquoi la requête 2 renvoie-t-elle un <code>result</code> et non une <code>error</code> ? Qui en tirera parti ?</li>
+                <li>Que signifie l'erreur de la requête 3 ? Quel code HTTP accompagne cette réponse en Streamable HTTP ?</li>
+                <li>Que doit faire le client après la réponse à la requête 4 ?</li>
+            </ol>
+        </div>
+    </section>
+
+</section>

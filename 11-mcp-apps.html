@@ -1,0 +1,321 @@
+<section id="mcp-apps">
+
+    <section>
+        <h2>MCP Apps</h2>
+    </section>
+
+    <section>
+        <h3>Les extensions</h3>
+        <ul>
+            <li>Fonctionnalités <strong>facultatives</strong>, définies en dehors du cœur de la spécification</li>
+            <li>Identifiées par <code>{préfixe}/{nom}</code> : <code>io.modelcontextprotocol/ui</code></li>
+            <li>Utilisées seulement si le client <strong>et</strong> le serveur les déclarent</li>
+        </ul>
+        <table>
+            <thead>
+                <tr><th>Extension officielle</th><th>Rôle</th></tr>
+            </thead>
+            <tbody>
+                <tr><td><strong>MCP Apps</strong></td><td>Interfaces HTML interactives affichées dans la conversation</td></tr>
+                <tr><td><strong>Tasks</strong></td><td>Opérations longues, suivies par interrogation</td></tr>
+                <tr><td><strong>Skills</strong></td><td>Instructions et fichiers de workflow servis par un serveur</td></tr>
+                <tr><td><strong>Auth</strong></td><td>Client credentials, autorisation gérée par l'entreprise</td></tr>
+            </tbody>
+        </table>
+        <footer>
+            <a href="https://modelcontextprotocol.io/extensions/overview" target="_blank" class="info">Extensions overview</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Négocier une extension</h3>
+        <div class="container">
+            <div class="col">
+                <h4>Client, à chaque requête</h4>
+                <pre><code class="language-json">"_meta": {
+  "io.modelcontextprotocol/clientCapabilities": {
+    "extensions": {
+      "io.modelcontextprotocol/ui": {
+        "mimeTypes": ["text/html;profile=mcp-app"]
+      }
+    }
+  }
+}</code></pre>
+            </div>
+            <div class="col">
+                <h4>Serveur, dans <code>server/discover</code></h4>
+                <pre><code class="language-json">"capabilities": {
+  "tools": {},
+  "resources": {},
+  "extensions": {
+    "io.modelcontextprotocol/ui": {
+      "mimeTypes": ["text/html;profile=mcp-app"]
+    }
+  }
+}</code></pre>
+            </div>
+        </div>
+        <p>Un serveur peut vérifier la prise en charge avant de s'appuyer sur une extension : <code>$context-&gt;getClientGateway()-&gt;supportsExtension(McpApps::EXTENSION_ID)</code>.</p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/extensions/overview#negotiation" target="_blank" class="info">Negotiation</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>MCP Apps</h3>
+        <p>Un tool peut afficher une <strong>interface HTML interactive</strong> directement dans la conversation : tableau de bord, formulaire, visualisation…</p>
+        <ul>
+            <li><strong>Contexte conservé</strong> : l'interface vit dans la conversation, sans changer d'onglet</li>
+            <li><strong>Échanges dans les deux sens</strong> : la vue appelle les tools du serveur via le host</li>
+            <li><strong>Sécurité</strong> : la vue s'exécute dans un iframe isolé, sans accès à la page du host</li>
+        </ul>
+        <p>Pris en charge par Claude, VS Code + GitHub Copilot, ChatGPT, Cursor, Goose…</p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/extensions/apps/overview" target="_blank" class="info">MCP Apps</a>
+            <a href="https://modelcontextprotocol.io/extensions/client-matrix" target="_blank" class="info">Extension support matrix</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Fonctionnement</h3>
+        <pre style="font-size: 0.5em;"><code class="language-none">Host                                        Vue (iframe)                                       Serveur MCP
+│ tools/list : _meta.ui.resourceUri               │                                                 │
+│◄──────────────────────────────────────────────────────────────────────────────────────────────────│
+│ resources/read ui://tickets/dashboard           │                                                 │
+│──────────────────────────────────────────────────────────────────────────────────────────────────►│
+│ HTML affiché, isolé                             │                                                 │
+│────────────────────────────────────────────────►│                                                 │
+│ ui/initialize                                   │                                                 │
+│◄────────────────────────────────────────────────│                                                 │
+│ tools/call show_dashboard (modèle)              │                                                 │
+│──────────────────────────────────────────────────────────────────────────────────────────────────►│
+│ ui/notifications/tool-result                    │                                                 │
+│────────────────────────────────────────────────►│                                                 │
+│ tools/call (bouton)                             │                                                 │
+│◄────────────────────────────────────────────────│                                                 │
+│ tools/call relayé par le host                   │                                                 │
+│──────────────────────────────────────────────────────────────────────────────────────────────────►│</code></pre>
+        <p>La vue et le host communiquent par <code>postMessage</code> avec des messages JSON-RPC : <code>ui/initialize</code>, <code>ui/notifications/tool-result</code>, <code>tools/call</code>…</p>
+        <footer>
+            <a href="https://github.com/modelcontextprotocol/ext-apps" target="_blank" class="info">ext-apps</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Côté serveur : la resource UI</h3>
+        <div class="tabs-container">
+            <ul class="tabs-buttons-container">
+                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
+            </ul>
+            <div class="tabs">
+                <div class="tab-php active">
+                    <pre style="font-size: 0.5em;" data-line="18-31" data-start="12" class="line-numbers"><code class="language-php">class TicketDashboard
+{
+    public function __construct(private TicketRepository $tickets)
+    {
+    }
+
+    #[McpResource(
+        uri: 'ui://tickets/dashboard',
+        name: 'dashboard',
+        mimeType: McpApps::MIME_TYPE,
+        meta: ['ui' =&gt; new \stdClass()],
+    )]
+    public function view(): TextResourceContents
+    {
+        return new TextResourceContents(
+            uri: 'ui://tickets/dashboard',
+            mimeType: McpApps::MIME_TYPE,
+            text: file_get_contents(__DIR__ . '/../dashboard.html'),
+        );
+    }</code></pre>
+                </div>
+            </div>
+        </div>
+        <p>Schéma <code>ui://</code> et type <code>text/html;profile=mcp-app</code> (<code>McpApps::MIME_TYPE</code>).</p>
+    </section>
+
+    <section>
+        <h3>Côté serveur : le tool lié</h3>
+        <div class="tabs-container">
+            <ul class="tabs-buttons-container">
+                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
+            </ul>
+            <div class="tabs">
+                <div class="tab-php active">
+                    <pre data-line="39" data-start="33" class="line-numbers"><code class="language-php">    /**
+     * Affiche le tableau de bord interactif des tickets.
+     */
+    #[McpTool(
+        name: 'show_dashboard',
+        annotations: new ToolAnnotations(readOnlyHint: true),
+        meta: ['ui' =&gt; new UiToolMeta(resourceUri: 'ui://tickets/dashboard')],
+    )]
+    public function show(): array
+    {
+        return ['tickets' =&gt; $this-&gt;tickets-&gt;findAll()];
+    }
+}</code></pre>
+                </div>
+            </div>
+        </div>
+        <p><code>UiToolMeta</code> ajoute à la définition du tool : <code>"_meta": {"ui": {"resourceUri": "ui://tickets/dashboard"}}</code>.</p>
+    </section>
+
+    <section>
+        <h3>Activer l'extension</h3>
+        <div class="tabs-container">
+            <ul class="tabs-buttons-container">
+                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
+            </ul>
+            <div class="tabs">
+                <div class="tab-php active">
+                    <pre data-line="5,12" class="line-numbers"><code class="language-php">&lt;?php
+
+require __DIR__ . '/vendor/autoload.php';
+
+use Mcp\Schema\Extension\Apps\McpApps;
+use Mcp\Server;
+use Mcp\Server\Transport\StdioTransport;
+
+exit(Server::builder()
+    -&gt;setServerInfo('Tickets', '1.0.0')
+    -&gt;setDiscovery(__DIR__, ['src'])
+    -&gt;enableExtension(new McpApps())
+    -&gt;build()
+    -&gt;run(new StdioTransport()));</code></pre>
+                </div>
+            </div>
+        </div>
+        <p>Sans <code>enableExtension()</code>, les hosts n'affichent que le résultat texte.</p>
+        <footer>
+            <a href="https://github.com/modelcontextprotocol/php-sdk/blob/main/docs/advanced/extensions.md" target="_blank" class="info">SDK : Protocol extensions</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>La vue HTML : échanger avec le host</h3>
+        <div class="tabs-container">
+            <ul class="tabs-buttons-container">
+                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
+            </ul>
+            <div class="tabs">
+                <div class="tab-php active">
+                    <pre style="font-size: 0.5em;" class="line-numbers"><code class="language-html">&lt;!DOCTYPE html&gt;
+&lt;html lang="fr"&gt;
+&lt;body&gt;
+    &lt;h1&gt;Tickets&lt;/h1&gt;
+    &lt;table id="tickets"&gt;&lt;/table&gt;
+    &lt;button id="refresh"&gt;Rafraîchir&lt;/button&gt;
+
+    &lt;script&gt;
+        let nextId = 1;
+        const pending = new Map();
+
+        function request(method, params) {
+            const id = nextId++;
+            window.parent.postMessage({ jsonrpc: '2.0', id, method, params }, '*');
+            return new Promise(resolve =&gt; pending.set(id, resolve));
+        }</code></pre>
+                </div>
+            </div>
+        </div>
+        <p><code>request()</code> envoie une requête JSON-RPC au host et renvoie une promesse résolue à la réception de la réponse.</p>
+    </section>
+
+    <section>
+        <h3>La vue HTML : afficher les tickets</h3>
+        <div class="tabs-container">
+            <ul class="tabs-buttons-container">
+                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
+            </ul>
+            <div class="tabs">
+                <div class="tab-php active">
+                    <pre style="font-size: 0.5em;" data-line="24,33-35" data-start="18" class="line-numbers"><code class="language-javascript">        function render(result) {
+            const table = document.getElementById('tickets');
+            table.replaceChildren();
+            for (const ticket of result.structuredContent.tickets) {
+                const row = table.insertRow();
+                for (const value of [`#${ticket.id}`, ticket.title, ticket.status]) {
+                    row.insertCell().textContent = value; // Jamais innerHTML : le titre vient d'un client
+                }
+            }
+        }
+
+        window.addEventListener('message', ({ data }) =&gt; {
+            if (pending.has(data.id)) {
+                pending.get(data.id)(data.result);
+                pending.delete(data.id);
+            } else if (data.method === 'ui/notifications/tool-result') {
+                render(data.params);
+            }
+        });</code></pre>
+                </div>
+            </div>
+        </div>
+        <p><code>textContent</code> et non <code>innerHTML</code> : les titres sont saisis par des clients.</p>
+    </section>
+
+    <section>
+        <h3>La vue HTML : initialiser et rafraîchir</h3>
+        <div class="tabs-container">
+            <ul class="tabs-buttons-container">
+                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
+            </ul>
+            <div class="tabs">
+                <div class="tab-php active">
+                    <pre data-line="42-48" data-start="38" class="line-numbers"><code class="language-javascript">        document.getElementById('refresh').addEventListener('click', async () =&gt; {
+            render(await request('tools/call', { name: 'show_dashboard', arguments: {} }));
+        });
+
+        request('ui/initialize', {
+            protocolVersion: '2026-01-26',
+            appInfo: { name: 'tickets-dashboard', version: '1.0.0' },
+            appCapabilities: {},
+        }).then(() =&gt; {
+            window.parent.postMessage({ jsonrpc: '2.0', method: 'ui/notifications/initialized' }, '*');
+        });</code></pre>
+                </div>
+            </div>
+        </div>
+        <p>La vue commence par <code>ui/initialize</code>, puis signale qu'elle est prête avec <code>ui/notifications/initialized</code> : le host lui envoie alors le résultat du tool.</p>
+    </section>
+
+    <section>
+        <h3>Tester l'application</h3>
+        <ul>
+            <li>Dans VS Code, demandez : « Affiche le tableau de bord des tickets »</li>
+            <li>Le résultat du tool s'affiche dans l'interface, puis le bouton <strong>Rafraîchir</strong> rappelle le tool</li>
+            <li>L'Inspector vérifie la liaison entre tool et resource :</li>
+        </ul>
+        <div class="tabs-container">
+            <ul class="tabs-buttons-container">
+                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
+            </ul>
+            <div class="tabs">
+                <div class="tab-php active">
+                    <pre><code class="language-bash">npx @modelcontextprotocol/inspector --cli php server.php --method tools/list --app-info</code></pre>
+                </div>
+            </div>
+        </div>
+        <p>Pour des applications plus riches, le SDK TypeScript <code>@modelcontextprotocol/ext-apps</code> gère le protocole de la vue.</p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/extensions/apps/build" target="_blank" class="info">Build an MCP App</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Exercice</h3>
+        <p>Ajoutez un tableau de bord interactif au fil rouge.</p>
+        <div class="instructions">
+            <ol>
+                <li>Créez <code>dashboard.html</code> et <code>src/TicketDashboard.php</code>, puis activez l'extension dans <code>server.php</code> et <code>http.php</code>.</li>
+                <li>Vérifiez avec l'Inspector que <code>show_dashboard</code> est bien lié à <code>ui://tickets/dashboard</code>.</li>
+                <li>Affichez le tableau de bord depuis Copilot, fermez un ticket dans la conversation puis cliquez sur <strong>Rafraîchir</strong>.</li>
+                <li>Créez un ticket dont le titre contient du HTML : vérifiez qu'il s'affiche comme du texte.</li>
+                <li>Bonus : un bouton <strong>Fermer</strong> par ticket qui appelle <code>close_ticket</code> depuis la vue.</li>
+            </ol>
+        </div>
+    </section>
+
+</section>

@@ -1,0 +1,200 @@
+<section id="going-further">
+
+    <section>
+        <h2>Aller plus loin</h2>
+    </section>
+
+    <section>
+        <h3>Extension Tasks</h3>
+        <p>Certaines opérations durent des minutes ou des heures : pipeline CI, import massif, validation humaine…</p>
+        <ul>
+            <li>Le serveur renvoie un <strong>identifiant de tâche</strong> au lieu de bloquer la requête</li>
+            <li>Le client interroge l'état avec <code>tasks/get</code>, fournit une entrée avec <code>tasks/update</code>, annule avec <code>tasks/cancel</code></li>
+            <li>La tâche survit à une déconnexion du client</li>
+            <li>Anciennement expérimentale dans le cœur du protocole, elle devient une <strong>extension</strong> en <code>2026-07-28</code></li>
+        </ul>
+        <table>
+            <thead>
+                <tr><th>Statut</th><th>Signification</th></tr>
+            </thead>
+            <tbody>
+                <tr><td><code>working</code></td><td>en cours</td></tr>
+                <tr><td><code>input_required</code></td><td>attend une entrée (<code>inputRequests</code>)</td></tr>
+                <tr><td><code>completed</code>, <code>failed</code>, <code>cancelled</code></td><td>terminée</td></tr>
+            </tbody>
+        </table>
+        <footer>
+            <a href="https://modelcontextprotocol.io/extensions/tasks/overview" target="_blank" class="info">Tasks</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Tasks : les messages</h3>
+        <div class="container">
+            <div class="col">
+                <h4><code>tools/call</code> renvoie une tâche</h4>
+                <pre><code class="language-json">{
+  "jsonrpc": "2.0",
+  "id": 7,
+  "result": {
+    "resultType": "task",
+    "taskId": "task_8f2c1d",
+    "status": "working",
+    "createdAt": "2026-09-17T10:00:00Z",
+    "lastUpdatedAt": "2026-09-17T10:00:00Z",
+    "ttlMs": 3600000,
+    "pollIntervalMs": 5000
+  }
+}</code></pre>
+            </div>
+            <div class="col">
+                <h4>Puis le client interroge</h4>
+                <pre><code class="language-json">{
+  "jsonrpc": "2.0",
+  "id": 8,
+  "method": "tasks/get",
+  "params": { "taskId": "task_8f2c1d", "_meta": { … } }
+}</code></pre>
+                <p>Tant que la tâche n'est pas terminée, le client respecte <code>pollIntervalMs</code>. Une fois <code>completed</code>, <code>result</code> contient le résultat du tool.</p>
+            </div>
+        </div>
+        <footer>
+            <a href="https://github.com/modelcontextprotocol/ext-tasks" target="_blank" class="info">ext-tasks</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Extension Skills</h3>
+        <p>Un <strong>skill</strong> est un dossier contenant un fichier <code>SKILL.md</code> : des instructions de workflow et des fichiers d'appui (format Agent Skills).</p>
+        <div class="container">
+            <div class="col">
+                <ul>
+                    <li>Découverte avec <code>skills/list</code> et <code>skills/get</code></li>
+                    <li>Fichiers lus avec <code>resources/read</code></li>
+                    <li>Le host décide quand charger un skill dans le contexte du modèle, souvent avec l'accord de l'utilisateur</li>
+                </ul>
+            </div>
+            <div class="col">
+                <pre><code class="language-json">"capabilities": {
+  "resources": {},
+  "extensions": {
+    "io.modelcontextprotocol/skills": { "directoryRead": true }
+  }
+}</code></pre>
+            </div>
+        </div>
+        <footer>
+            <a href="https://modelcontextprotocol.io/extensions/skills/overview" target="_blank" class="info">Skills over MCP</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>MCP Registry</h3>
+        <div class="container">
+            <div class="col" style="flex: 3;">
+                <ul>
+                    <li>Registre officiel des <strong>métadonnées</strong> des serveurs MCP publics (en préversion)</li>
+                    <li>Chaque serveur est décrit par un <code>server.json</code> : nom, paquet ou URL distante, configuration</li>
+                    <li>Noms en DNS inversé, vérifiés : <code>io.github.utilisateur/serveur</code></li>
+                    <li>Destiné aux agrégateurs et places de marché, pas directement aux hosts</li>
+                </ul>
+            </div>
+            <div class="col" style="flex: 2;">
+                <pre><code class="language-json">{
+  "name": "com.example/tickets",
+  "description": "Gestion des tickets de support",
+  "version": "1.0.0",
+  "remotes": [
+    { "type": "streamable-http", "url": "https://tickets.example.com/mcp" }
+  ]
+}</code></pre>
+            </div>
+        </div>
+        <footer>
+            <a href="https://modelcontextprotocol.io/registry/about" target="_blank" class="info">The MCP Registry</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Construire un client</h3>
+        <div class="tabs-container">
+            <ul class="tabs-buttons-container">
+                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
+            </ul>
+            <div class="tabs">
+                <div class="tab-php active">
+                    <pre style="font-size: 0.5em;" class="line-numbers"><code class="language-php">&lt;?php
+
+require __DIR__ . '/vendor/autoload.php';
+
+use Mcp\Client;
+use Mcp\Client\Transport\StdioTransport;
+
+$client = Client::builder()
+    -&gt;setClientInfo('tickets-cli', '1.0.0')
+    -&gt;build();
+
+$client-&gt;connect(new StdioTransport(command: 'php', args: [__DIR__ . '/server.php']));
+
+foreach ($client-&gt;listTools()-&gt;tools as $tool) {
+    echo "- {$tool-&gt;name} : {$tool-&gt;description}\n";
+}
+
+$result = $client-&gt;callTool('get_ticket', ['id' =&gt; 2]);
+echo $result-&gt;content[0]-&gt;text, "\n";
+
+$client-&gt;disconnect();</code></pre>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <section>
+        <h3>Construire un host</h3>
+        <p>Un client seul ne suffit pas : le <strong>host</strong> fait le lien entre les serveurs et le modèle.</p>
+        <ol>
+            <li>Récupérer les tools de chaque serveur avec <code>tools/list</code></li>
+            <li>Les transmettre au modèle via l'API de son fournisseur (tool use / function calling)</li>
+            <li>Quand le modèle demande un appel, le <strong>faire valider</strong> par l'utilisateur si nécessaire</li>
+            <li>Exécuter <code>tools/call</code> sur le bon serveur et renvoyer le résultat au modèle</li>
+            <li>Répéter jusqu'à la réponse finale</li>
+        </ol>
+        <p>C'est ce que font VS Code, Claude ou ChatGPT, avec en plus la gestion des resources, des prompts et de l'elicitation.</p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/docs/2026-07-28/develop/build-client" target="_blank" class="info">Build an MCP client</a>
+            <a href="https://modelcontextprotocol.io/docs/2026-07-28/develop/clients/client-best-practices" target="_blank" class="info">Client best practices</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Bonus : un vrai serveur d'autorisation</h3>
+        <p>Protégez le fil rouge avec OAuth en vous appuyant sur l'exemple <code>oauth-keycloak</code> du SDK PHP :</p>
+        <div class="instructions">
+            <ol>
+                <li>Lancez Keycloak avec Docker et importez le realm fourni.</li>
+                <li>Publiez les métadonnées RFC 9728 avec <code>ProtectedResourceMetadataMiddleware</code>.</li>
+                <li>Validez les jetons avec <code>AuthorizationMiddleware</code> et <code>JwtTokenValidator</code> (émetteur, audience).</li>
+                <li>Réservez <code>close_ticket</code> et <code>assign_ticket</code> à un scope d'écriture.</li>
+                <li>Connectez-vous depuis l'Inspector et observez le flux d'autorisation.</li>
+            </ol>
+        </div>
+        <footer>
+            <a href="https://github.com/modelcontextprotocol/php-sdk/tree/main/examples/server/oauth-keycloak" target="_blank" class="info">Exemple oauth-keycloak</a>
+            <a href="https://github.com/modelcontextprotocol/php-sdk/blob/main/docs/run/authorization.md" target="_blank" class="info">SDK : Authorization</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Références</h3>
+        <ul>
+            <li><a href="https://modelcontextprotocol.io" target="_blank">modelcontextprotocol.io</a> : documentation, et son <a href="https://modelcontextprotocol.io/llms.txt" target="_blank">index pour les agents</a></li>
+            <li><a href="https://modelcontextprotocol.io/specification/latest" target="_blank">Spécification courante</a> et <a href="https://modelcontextprotocol.io/specification/2026-07-28/changelog" target="_blank">changements de la version 2026-07-28</a></li>
+            <li><a href="https://github.com/modelcontextprotocol/php-sdk" target="_blank">SDK PHP</a> et ses exemples</li>
+            <li><a href="https://modelcontextprotocol.io/docs/tools/inspector" target="_blank">MCP Inspector</a></li>
+            <li><a href="https://modelcontextprotocol.io/extensions/overview" target="_blank">Extensions officielles</a></li>
+            <li><a href="https://modelcontextprotocol.io/docs/tutorials/security/security_best_practices" target="_blank">Bonnes pratiques de sécurité</a></li>
+        </ul>
+        <p><mark>MCP évolue plusieurs fois par an : consultez le changelog de chaque nouvelle version.</mark></p>
+    </section>
+
+</section>

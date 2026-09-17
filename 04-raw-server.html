@@ -1,0 +1,205 @@
+<section id="raw-server">
+
+    <section>
+        <h2>Un serveur sans SDK</h2>
+    </section>
+
+    <section>
+        <h3>Objectif</h3>
+        <p>Avant d'utiliser un SDK, écrivons un serveur MCP <strong>à la main</strong>, en PHP pur, pour voir le protocole à nu.</p>
+        <ul>
+            <li>Transport <strong>Streamable HTTP</strong>, servi par le serveur intégré de PHP (<code>php -S</code>)</li>
+            <li>Ère <code>modern</code> : aucune poignée de main à implémenter</li>
+            <li>Trois méthodes : <code>server/discover</code>, <code>tools/list</code> et <code>tools/call</code></li>
+            <li>Un seul tool : <code>add</code>, qui additionne deux nombres</li>
+        </ul>
+        <p><mark>Environ 50 lignes suffisent pour qu'un vrai client MCP utilise notre tool.</mark></p>
+        <p class="console-error">Ce serveur est pédagogique : il ne valide ni les arguments, ni l'en-tête <code>Origin</code>.</p>
+    </section>
+
+    <section>
+        <h3><code>index.php</code> : lire la requête</h3>
+        <p>Le corps de la requête POST contient un message JSON-RPC. La fonction <code>respond()</code> envoie la réponse et arrête le script.</p>
+        <div class="tabs-container">
+            <ul class="tabs-buttons-container">
+                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
+            </ul>
+            <div class="tabs">
+                <div class="tab-php active">
+                    <pre class="line-numbers"><code class="language-php">&lt;?php
+
+$request = json_decode(file_get_contents('php://input'), true);
+$params = $request['params'] ?? [];
+
+header('Content-Type: application/json');
+
+function respond(array $message, int $status = 200): never
+{
+    http_response_code($status);
+    echo json_encode(['jsonrpc' =&gt; '2.0', ...$message]);
+    exit;
+}</code></pre>
+                </div>
+            </div>
+        </div>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/basic" target="_blank" class="info">Base protocol</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3><code>index.php</code> : version et tools</h3>
+        <p>On refuse toute autre version que <code>2026-07-28</code>, puis on décrit le tool avec un <strong>JSON Schema</strong> :</p>
+        <div class="tabs-container">
+            <ul class="tabs-buttons-container">
+                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
+            </ul>
+            <div class="tabs">
+                <div class="tab-php active">
+                    <pre style="font-size: 0.45em;" data-line="15-22" data-start="15" class="line-numbers"><code class="language-php">$version = $params['_meta']['io.modelcontextprotocol/protocolVersion'] ?? null;
+if ($version !== '2026-07-28') {
+    respond(['id' =&gt; $request['id'] ?? null, 'error' =&gt; [
+        'code' =&gt; -32022,
+        'message' =&gt; 'Unsupported protocol version',
+        'data' =&gt; ['supported' =&gt; ['2026-07-28'], 'requested' =&gt; $version],
+    ]], 400);
+}
+
+$tools = [[
+    'name' =&gt; 'add',
+    'description' =&gt; 'Additionne deux nombres',
+    'inputSchema' =&gt; [
+        'type' =&gt; 'object',
+        'properties' =&gt; ['a' =&gt; ['type' =&gt; 'number'], 'b' =&gt; ['type' =&gt; 'number']],
+        'required' =&gt; ['a', 'b'],
+    ],
+]];</code></pre>
+                </div>
+            </div>
+        </div>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/basic/versioning" target="_blank" class="info">Versioning</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3><code>index.php</code> : router les méthodes</h3>
+        <p>Un <code>match</code> associe chaque méthode à son résultat ; toute autre méthode renvoie <code>404</code> et <code>-32601</code> :</p>
+        <div class="tabs-container">
+            <ul class="tabs-buttons-container">
+                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
+            </ul>
+            <div class="tabs">
+                <div class="tab-php active">
+                    <pre style="font-size: 0.45em;" data-line="50" data-start="34" class="line-numbers"><code class="language-php">$result = match ($request['method']) {
+    'server/discover' =&gt; [
+        'supportedVersions' =&gt; ['2026-07-28'],
+        'capabilities' =&gt; ['tools' =&gt; new stdClass()],
+        '_meta' =&gt; ['io.modelcontextprotocol/serverInfo' =&gt; ['name' =&gt; 'calculator', 'version' =&gt; '1.0.0']],
+        'ttlMs' =&gt; 3600000,
+        'cacheScope' =&gt; 'public',
+    ],
+    'tools/list' =&gt; ['tools' =&gt; $tools, 'ttlMs' =&gt; 3600000, 'cacheScope' =&gt; 'public'],
+    'tools/call' =&gt; [
+        'content' =&gt; [['type' =&gt; 'text', 'text' =&gt; (string) ($params['arguments']['a'] + $params['arguments']['b'])]],
+        'isError' =&gt; false,
+    ],
+    default =&gt; respond(['id' =&gt; $request['id'], 'error' =&gt; ['code' =&gt; -32601, 'message' =&gt; 'Method not found']], 404),
+};
+
+respond(['id' =&gt; $request['id'], 'result' =&gt; ['resultType' =&gt; 'complete', ...$result]]);</code></pre>
+                </div>
+            </div>
+        </div>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/server/tools" target="_blank" class="info">Tools</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Lancer et tester</h3>
+        <p>On démarre le serveur intégré de PHP, puis on interroge <code>server/discover</code> :</p>
+        <div class="tabs-container">
+            <ul class="tabs-buttons-container">
+                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
+            </ul>
+            <div class="tabs">
+                <div class="tab-php active">
+                    <pre><code class="language-bash">php -S localhost:8000 index.php</code></pre>
+                </div>
+            </div>
+        </div>
+        <pre style="font-size: 0.5em;"><code class="language-bash">curl -X POST http://localhost:8000 \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -H 'MCP-Protocol-Version: 2026-07-28' \
+  -H 'Mcp-Method: server/discover' \
+  -d '{"jsonrpc": "2.0", "id": 1, "method": "server/discover",
+       "params": {"_meta": {"io.modelcontextprotocol/protocolVersion": "2026-07-28", "io.modelcontextprotocol/clientCapabilities": {}}}}'</code></pre>
+        <p>Les en-têtes <code>MCP-Protocol-Version</code> et <code>Mcp-Method</code> sont exigés par la spécification ; notre serveur minimal ne les vérifie pas.</p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http#request-metadata" target="_blank" class="info">Request metadata</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Appeler le tool</h3>
+        <pre style="font-size: 0.5em;"><code class="language-bash">curl -X POST http://localhost:8000 \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -H 'MCP-Protocol-Version: 2026-07-28' \
+  -H 'Mcp-Method: tools/call' -H 'Mcp-Name: add' \
+  -d '{"jsonrpc": "2.0", "id": 3, "method": "tools/call",
+       "params": {"name": "add", "arguments": {"a": 2, "b": 40}, "_meta": {"io.modelcontextprotocol/protocolVersion": "2026-07-28", "io.modelcontextprotocol/clientCapabilities": {}}}}'</code></pre>
+        <p>Réponse :</p>
+        <pre style="font-size: 0.5em;"><code class="language-json">{"jsonrpc":"2.0","id":3,"result":{"resultType":"complete","content":[{"type":"text","text":"42"}],"isError":false}}</code></pre>
+        <p>Le client (ou le modèle) lit le contenu <code>text</code> du résultat. <code>isError: false</code> indique que le tool s'est exécuté sans erreur.</p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/server/tools#calling-tools" target="_blank" class="info">Calling tools</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Un vrai client : l'Inspector</h3>
+        <p>L'Inspector se connecte à notre serveur en ère <code>modern</code> grâce à un fichier de configuration :</p>
+        <pre><code class="language-json">{
+  "mcpServers": {
+    "calculator": { "type": "http", "url": "http://localhost:8000", "protocolEra": "modern" }
+  }
+}</code></pre>
+        <pre style="font-size: 0.5em;"><code class="language-bash">npx @modelcontextprotocol/inspector --cli --config inspector.json --server calculator \
+  --method tools/call --tool-name add --tool-arg a=2 --tool-arg b=40</code></pre>
+        <p>Par défaut, l'Inspector utilise l'ère <code>legacy</code> et commencerait par <code>initialize</code>, que notre serveur ne connaît pas.</p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/docs/2026-07-28/tools/inspector/cli" target="_blank" class="info">Inspector CLI</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Exercice</h3>
+        <p>Écrivez votre propre serveur sans SDK.</p>
+        <div class="instructions">
+            <ol>
+                <li>Créez <code>index.php</code> et lancez-le avec <code>php -S localhost:8000 index.php</code>.</li>
+                <li>Testez <code>server/discover</code>, <code>tools/list</code> et <code>tools/call</code> avec <code>curl</code>.</li>
+                <li>Ajoutez un tool <code>multiply</code> et vérifiez qu'il apparaît dans <code>tools/list</code>.</li>
+                <li>Envoyez une méthode inconnue, puis une autre version du protocole : observez codes HTTP et erreurs.</li>
+                <li>Appelez vos tools depuis l'Inspector en ère <code>modern</code>.</li>
+                <li>Bonus : renvoyez une erreur de tool (<code>isError: true</code>) quand un argument n'est pas un nombre.</li>
+            </ol>
+        </div>
+    </section>
+
+    <section>
+        <h3>Ce que le SDK fera pour nous</h3>
+        <p>Notre serveur fonctionne, mais il manque beaucoup de choses qu'un SDK prend en charge :</p>
+        <ul>
+            <li>Générer le <code>inputSchema</code> à partir des types PHP et <strong>valider</strong> les arguments</li>
+            <li>Vérifier les en-têtes, l'en-tête <code>Origin</code> et la version demandée</li>
+            <li>Servir les <strong>deux ères</strong> (<code>legacy</code> et <code>modern</code>) avec le même code</li>
+            <li>Gérer le transport <strong>stdio</strong>, les erreurs, le cache, l'elicitation…</li>
+        </ul>
+        <p><mark>Avec le SDK, on n'écrit plus que le code métier : les tools, les resources et les prompts.</mark></p>
+    </section>
+
+</section>

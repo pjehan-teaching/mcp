@@ -1,0 +1,228 @@
+<section id="http-transport">
+
+    <section>
+        <h2>Serveur HTTP</h2>
+    </section>
+
+    <section>
+        <h3>Pourquoi passer en HTTP ?</h3>
+        <ul>
+            <li>Rendre le serveur accessible <strong>à distance</strong>, sans installation chez l'utilisateur</li>
+            <li>Servir <strong>plusieurs clients</strong> simultanément</li>
+            <li>Déployer plusieurs instances derrière un répartiteur de charge : l'ère <code>modern</code> ne demande aucun état partagé</li>
+            <li>Protéger l'accès avec une <strong>autorisation</strong> OAuth (chapitre suivant)</li>
+            <li>Et, avec le SDK PHP 0.8 : servir l'ère <code>modern</code>, que le transport stdio ne gère pas</li>
+        </ul>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http" target="_blank" class="info">Streamable HTTP</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Dépendances</h3>
+        <p>Le transport HTTP du SDK manipule des requêtes et réponses <strong>PSR-7</strong>. Il lui faut une implémentation et un émetteur de réponse :</p>
+        <div class="tabs-container">
+            <ul class="tabs-buttons-container">
+                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
+            </ul>
+            <div class="tabs">
+                <div class="tab-php active">
+                    <pre><code class="language-bash">composer require nyholm/psr7 laminas/laminas-httphandlerrunner</code></pre>
+                </div>
+            </div>
+        </div>
+        <ul>
+            <li><code>nyholm/psr7</code> : objets requête et réponse, découverts automatiquement</li>
+            <li><code>laminas/laminas-httphandlerrunner</code> : envoie la réponse PSR-7 au navigateur ou au client</li>
+        </ul>
+        <footer>
+            <a href="https://github.com/modelcontextprotocol/php-sdk/blob/main/docs/run/http.md" target="_blank" class="info">SDK : HTTP transport</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3><code>http.php</code></h3>
+        <div class="tabs-container">
+            <ul class="tabs-buttons-container">
+                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
+            </ul>
+            <div class="tabs">
+                <div class="tab-php active">
+                    <pre style="font-size: 0.5em;" data-line="11,16,18,20" class="line-numbers"><code class="language-php">&lt;?php
+
+require __DIR__ . '/vendor/autoload.php';
+
+use Http\Discovery\Psr17Factory;
+use Laminas\HttpHandlerRunner\Emitter\SapiEmitter;
+use Mcp\Server;
+use Mcp\Server\Session\FileSessionStore;
+use Mcp\Server\Transport\StreamableHttpTransport;
+
+$request = (new Psr17Factory())-&gt;createServerRequestFromGlobals();
+
+$response = Server::builder()
+    -&gt;setServerInfo('Tickets', '1.0.0')
+    -&gt;setDiscovery(__DIR__, ['src'])
+    -&gt;setSession(new FileSessionStore(__DIR__ . '/sessions'))
+    -&gt;build()
+    -&gt;run(new StreamableHttpTransport($request));
+
+(new SapiEmitter())-&gt;emit($response);</code></pre>
+                </div>
+            </div>
+        </div>
+        <footer>
+            <a href="https://github.com/modelcontextprotocol/php-sdk/blob/main/docs/get-started/inspector.md" target="_blank" class="info">SDK : HTTP</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Une seule URL, deux ères</h3>
+        <p>Le transport examine <strong>chaque requête</strong> et choisit l'ère qui y répond :</p>
+        <table>
+            <thead>
+                <tr><th>Indice</th><th>Ère</th></tr>
+            </thead>
+            <tbody>
+                <tr><td><code>_meta</code> annonce <code>2026-07-28</code></td><td><code>modern</code></td></tr>
+                <tr><td><code>_meta</code> annonce une version plus ancienne, ou pas de <code>_meta</code> (<code>initialize</code>)</td><td><code>legacy</code></td></tr>
+                <tr><td>Requête <code>GET</code> ou <code>DELETE</code></td><td><code>legacy</code></td></tr>
+            </tbody>
+        </table>
+        <ul>
+            <li><code>FileSessionStore</code> sert uniquement à l'ère <code>legacy</code> : chaque requête est traitée par un nouveau processus PHP</li>
+            <li>Par défaut, le transport refuse les origines croisées et n'accepte que <code>localhost</code> (protection contre le DNS rebinding)</li>
+        </ul>
+        <footer>
+            <a href="https://github.com/modelcontextprotocol/php-sdk/blob/main/docs/run/protocol-eras.md" target="_blank" class="info">SDK : Serving both eras</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Lancer et tester</h3>
+        <div class="tabs-container">
+            <ul class="tabs-buttons-container">
+                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
+            </ul>
+            <div class="tabs">
+                <div class="tab-php active">
+                    <pre><code class="language-bash">php -S localhost:8000 http.php</code></pre>
+                </div>
+            </div>
+        </div>
+        <p>Dans l'Inspector, déclarez le serveur dans chaque ère :</p>
+        <pre><code class="language-json">{
+  "mcpServers": {
+    "tickets-legacy": { "type": "http", "url": "http://localhost:8000" },
+    "tickets-modern": { "type": "http", "url": "http://localhost:8000", "protocolEra": "modern" }
+  }
+}</code></pre>
+        <pre><code class="language-bash">npx @modelcontextprotocol/inspector --config inspector.json --server tickets-modern</code></pre>
+        <footer>
+            <a href="https://modelcontextprotocol.io/docs/2026-07-28/tools/inspector/configuration" target="_blank" class="info">Inspector configuration</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Se connecter depuis VS Code</h3>
+        <div class="container">
+            <div class="col">
+                <pre><code class="language-json">{
+    "servers": {
+        "tickets": {
+            "type": "http",
+            "url": "http://localhost:8000"
+        }
+    }
+}</code></pre>
+            </div>
+            <div class="col">
+                <ul>
+                    <li>VS Code se connecte en ère <code>legacy</code>, le même serveur répond</li>
+                    <li><strong>MCP: List Servers</strong> &gt; <strong>Show Output</strong> affiche les échanges et les erreurs</li>
+                    <li>Un serveur distant se déclare de la même façon, avec son URL publique</li>
+                </ul>
+            </div>
+        </div>
+        <footer>
+            <a href="https://code.visualstudio.com/docs/copilot/reference/mcp-configuration" target="_blank" class="info">MCP configuration reference</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Accepter d'autres domaines</h3>
+        <p>Derrière un nom de domaine, déclarez les domaines autorisés, sinon le serveur répond <code>403</code> :</p>
+        <div class="tabs-container">
+            <ul class="tabs-buttons-container">
+                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
+            </ul>
+            <div class="tabs">
+                <div class="tab-php active">
+                    <pre><code class="language-php">use Mcp\Server\Transport\Http\Middleware\CorsMiddleware;
+use Mcp\Server\Transport\Http\Middleware\DnsRebindingProtectionMiddleware;
+
+new StreamableHttpTransport($request, middleware: [
+    new CorsMiddleware(),
+    new DnsRebindingProtectionMiddleware(allowedHosts: ['tickets.example.com']),
+]);</code></pre>
+                </div>
+            </div>
+        </div>
+        <p>Dans une application Symfony ou Laravel, le transport s'intègre dans un contrôleur via les passerelles PSR-7 du framework.</p>
+        <footer>
+            <a href="https://github.com/modelcontextprotocol/php-sdk/blob/main/docs/run/http.md#dns-rebinding-protection" target="_blank" class="warning">DNS rebinding protection</a>
+            <a href="https://github.com/modelcontextprotocol/php-sdk/blob/main/docs/run/framework-integration.md" target="_blank" class="info">Framework integration</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Intégrer MCP dans Symfony</h3>
+        <div class="container">
+            <div class="col">
+                <pre style="font-size: 0.5em;"><code class="language-yaml"># config/packages/mcp.yaml
+mcp:
+    servers:
+        default:
+            name: 'tickets'
+            transports:
+                stdio: true
+                http: true
+            http:
+                path: /mcp
+            registry: '*'
+
+# config/routes.yaml
+mcp:
+    resource: .
+    type: mcp</code></pre>
+            </div>
+            <div class="col">
+                <ul>
+                    <li>Bundle officiel <code>symfony/mcp-bundle</code>, basé sur <code>mcp/sdk</code></li>
+                    <li>Déclaration des serveurs, transports et capacités en configuration</li>
+                    <li>Les services portant <code>#[McpTool]</code>, <code>#[McpResource]</code>… sont détectés automatiquement</li>
+                    <li>Expérimental, comme le SDK</li>
+                </ul>
+            </div>
+        </div>
+        <pre><code class="language-bash">composer require symfony/mcp-bundle</code></pre>
+        <footer>
+            <a href="https://symfony.com/doc/current/ai/bundles/mcp-bundle.html" target="_blank" class="info">MCP Bundle</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Exercice</h3>
+        <p>Rendez le fil rouge accessible en HTTP.</p>
+        <div class="instructions">
+            <ol>
+                <li>Installez les dépendances et créez <code>http.php</code>.</li>
+                <li>Lancez <code>php -S localhost:8000 http.php</code> et connectez l'Inspector en ère <code>legacy</code>, puis <code>modern</code>.</li>
+                <li>En ère <code>modern</code>, fermez un ticket et retrouvez l'échange <code>input_required</code> dans l'historique.</li>
+                <li>Remplacez le serveur stdio par le serveur HTTP dans <code>.vscode/mcp.json</code> et testez depuis Copilot.</li>
+                <li>Bonus : envoyez avec <code>curl</code> une requête dont l'en-tête <code>Mcp-Method</code> contredit le corps, et observez l'erreur.</li>
+            </ol>
+        </div>
+    </section>
+
+</section>
