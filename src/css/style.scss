@@ -1,0 +1,57 @@
+@use "tabs";
+
+.reveal {
+
+    pre[class*="language-"] {
+        width: 100%;
+        box-sizing: border-box;
+        font-size: 0.6em;
+        &:not(.line-numbers) {
+            padding: 0.5em;
+        }
+        code {
+            padding: 0;
+        }
+        // reveal.js makes <code> scrollable, which clips the Prism line numbers placed on its left
+        &.line-numbers {
+            max-height: 400px;
+            > code {
+                overflow: visible;
+                max-height: none;
+            }
+        }
+    }
+
+    .container {
+        display: flex;
+        gap: 1em;
+        align-items: flex-start;
+        .col {
+            flex: 1;
+        }
+    }
+
+    section ul,
+    section ol {
+        display: block;
+        margin-bottom: 1em;
+    }
+
+    img.logo {
+        box-sizing: border-box;
+        max-height: 200px;
+        max-width: 100%;
+        background-color: white;
+        padding: 1em;
+    }
+
+    .keyboard-key {
+        display: inline-block;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        padding: 0.1em 0.5em;
+        box-shadow: 0 1px 0 rgba(0, 0, 0, 0.2), 0 0 0 2px #fff inset;
+        background-color: #f7f7f7;
+    }
+
+}

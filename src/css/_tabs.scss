@@ -1,0 +1,34 @@
+.reveal {
+
+  .tabs-buttons-container {
+    display: flex;
+    gap: 0.5rem;
+    list-style-type: none;
+    margin: 0;
+
+    .tab-button {
+      padding: 0.5rem 1rem;
+      font-size: 1rem;
+      font-weight: bold;
+      color: white;
+      border: 1px solid #78b9e6;
+      background-color: #78b9e6;
+      cursor: pointer;
+
+      &.active {
+        border-color: #268bd2;
+      }
+    }
+  }
+
+  .tabs {
+    > * {
+      display: none;
+
+      &.active {
+        display: block;
+      }
+    }
+  }
+
+}
