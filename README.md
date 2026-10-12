@@ -36,7 +36,7 @@ Le cours enseigne l'ère `modern` du protocole ; l'ère `legacy` est présentée
 
 #### Mise en pratique (45 min)
 - Installer VS Code + GitHub Copilot et le MCP Inspector
-- Brancher un serveur MCP existant dans VS Code et le faire utiliser par le modèle
+- Brancher un serveur MCP distant (démo, authentification fictive) et le serveur local filesystem dans VS Code, et les faire utiliser par le modèle
 - Observer les échanges du même serveur dans l'Inspector
 
 ---

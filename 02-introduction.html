@@ -230,19 +230,23 @@
     </section>
 
     <section>
-        <h3>Brancher un serveur dans VS Code</h3>
+        <h3>Brancher des serveurs dans VS Code</h3>
         <p>Le fichier <code>.vscode/mcp.json</code> déclare les serveurs du projet :</p>
         <pre><code class="language-json">{
     "servers": {
         "filesystem": {
             "command": "npx",
             "args": ["-y", "@modelcontextprotocol/server-filesystem", "${workspaceFolder}"]
+        },
+        "example": {
+            "type": "http",
+            "url": "https://example-server.modelcontextprotocol.io/mcp"
         }
     }
 }</code></pre>
         <ul>
-            <li><code>command</code> et <code>args</code> : la commande qui lance un serveur local (stdio)</li>
-            <li>Un serveur distant se déclare avec <code>"type": "http"</code> et <code>"url"</code></li>
+            <li><code>filesystem</code> : <code>command</code> et <code>args</code> lancent un serveur <strong>local</strong> (stdio)</li>
+            <li><code>example</code> : <code>"type": "http"</code> et <code>"url"</code> désignent un serveur <strong>distant</strong></li>
             <li>La commande <strong>MCP: List Servers</strong> permet de démarrer, arrêter et consulter les logs d'un serveur</li>
         </ul>
         <footer>
@@ -266,14 +270,30 @@
     </section>
 
     <section>
-        <h3>Exercice</h3>
-        <p>Vous allez brancher le serveur officiel <strong>filesystem</strong> dans VS Code, puis observer les mêmes échanges dans l'Inspector.</p>
+        <h3>Exercice - Brancher deux serveurs</h3>
+        <p>Vous allez brancher dans VS Code un serveur <strong>distant</strong> de démonstration et le serveur officiel <strong>filesystem</strong>, puis observer les mêmes échanges dans l'Inspector.</p>
         <div class="instructions">
             <ol>
                 <li>Installez Node.js 22.19+, VS Code et GitHub Copilot.</li>
                 <li>Ouvrez dans VS Code un dossier contenant un <code>README.md</code>.</li>
-                <li>Déclarez le serveur filesystem dans <code>.vscode/mcp.json</code>.</li>
-                <li>En mode agent, demandez : « Résume le README du projet ». Observez les tools appelés.</li>
+                <li>Déclarez les serveurs <code>filesystem</code> et <code>example</code> dans <code>.vscode/mcp.json</code> (slide 2.13).</li>
+                <li>Démarrez-les avec <strong>MCP: List Servers</strong> et vérifiez qu'ils sont actifs.</li>
+            </ol>
+        </div>
+        <p>Au premier démarrage du serveur distant, VS Code ouvre une demande d'<strong>authentification</strong> : elle est <mark>fictive</mark>. Le serveur de démonstration embarque un faux fournisseur d'identité, aucun compte réel n'est nécessaire.</p>
+        <footer>
+            <a href="https://code.visualstudio.com/docs/copilot/customization/mcp-servers" target="_blank" class="info">MCP servers in VS Code</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Exercice - Qui appelle quoi ?</h3>
+        <p>Le README est lisible par les tools intégrés de Copilot : il ne prouve pas qu'un serveur MCP a été utilisé.</p>
+        <div class="instructions">
+            <ol start="5">
+                <li>Dans <strong>Configure Tools</strong>, repérez les tools de chaque serveur.</li>
+                <li>En mode agent, demandez : « Additionne 17 et 25 avec le tool <code>add</code> ». Quel serveur a répondu ?</li>
+                <li>Demandez : « Résume le README du projet ». Quel tool a été appelé ? Désactivez les tools intégrés et recommencez.</li>
                 <li>Dans l'Inspector, appelez <code>list_directory</code> puis <code>read_text_file</code>.</li>
                 <li>Qui a choisi les tools et leurs arguments dans chaque cas ?</li>
             </ol>
