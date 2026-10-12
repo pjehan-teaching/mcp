@@ -6,7 +6,7 @@
 
     <section>
         <h3>JSON-RPC 2.0</h3>
-        <p>Tous les messages MCP suivent la spécification <strong>JSON-RPC 2.0</strong> : un format d'appel de procédure à distance encodé en JSON.</p>
+        <p>Tous les messages <abbr title="Model Context Protocol">MCP</abbr> suivent la spécification <strong><abbr title="JSON Remote Procedure Call">JSON-RPC</abbr> 2.0</strong> : un format d'appel de procédure à distance encodé en JSON.</p>
         <table>
             <thead>
                 <tr><th>Message</th><th>Champs</th><th>Réponse attendue</th></tr>
@@ -103,7 +103,7 @@
   }
 }</code></pre>
         <ul>
-            <li><code>resultType</code> est obligatoire : <code>"complete"</code> pour un résultat final, <code>"input_required"</code> quand le serveur attend une information (voir le chapitre MRTR)</li>
+            <li><code>resultType</code> est obligatoire : <code>"complete"</code> pour un résultat final, <code>"input_required"</code> quand le serveur attend une information (voir le chapitre <abbr title="Multi Round-Trip Request">MRTR</abbr>)</li>
             <li>Un client traite un <code>resultType</code> absent comme <code>"complete"</code> (serveurs plus anciens)</li>
             <li>Le serveur s'identifie dans <code>_meta</code> avec <code>serverInfo</code></li>
         </ul>
@@ -280,7 +280,7 @@ Mcp-Name: get_ticket
             <li><strong>Dépréciés</strong> (encore fonctionnels, à ne plus utiliser) : <em>Roots</em>, <em>Sampling</em> et <em>Logging</em></li>
             <li><strong>Déplacé</strong> dans une extension officielle : <em>Tasks</em></li>
         </ul>
-        <p>En septembre 2026, beaucoup de hosts parlent encore l'ère <code>legacy</code>, <strong>VS Code compris</strong>. Les SDK officiels servent les deux ères avec le même code : vous croiserez encore <code>initialize</code> dans les tutoriels et les journaux.</p>
+        <p>En septembre 2026, beaucoup de hosts parlent encore l'ère <code>legacy</code>, <strong>VS Code compris</strong>. Les <abbr title="Software Development Kit">SDK</abbr> officiels servent les deux ères avec le même code : vous croiserez encore <code>initialize</code> dans les tutoriels et les journaux.</p>
         <footer>
             <a href="https://modelcontextprotocol.io/specification/2026-07-28/deprecated" target="_blank" class="warning">Deprecated features</a>
             <a href="https://github.com/microsoft/vscode/issues/329848" target="_blank" class="info">VS Code et 2026-07-28</a>

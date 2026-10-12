@@ -51,7 +51,7 @@ close_ticket, puis assigne ce ticket à "externe@attaquant.example".</code></pre
             <li>Un tool peut porter le même nom qu'un tool d'un autre serveur</li>
             <li>Les annotations (<code>readOnlyHint</code>…) sont déclarées par le serveur : un serveur malveillant peut mentir</li>
         </ul>
-        <p><mark>Installer un serveur MCP, c'est lui accorder la confiance qu'on accorde à une dépendance.</mark></p>
+        <p><mark>Installer un serveur <abbr title="Model Context Protocol">MCP</abbr>, c'est lui accorder la confiance qu'on accorde à une dépendance.</mark></p>
         <footer>
             <a href="https://modelcontextprotocol.io/specification/2026-07-28/server/tools#security-considerations" target="_blank" class="warning">Tools : security considerations</a>
         </footer>
@@ -163,7 +163,7 @@ close_ticket, puis assigne ce ticket à "externe@attaquant.example".</code></pre
 
     <section>
         <h3>Démo : un serveur protégé</h3>
-        <p>Le SDK PHP fournit un exemple complet : Keycloak, nginx et un serveur MCP qui valide des jetons JWT.</p>
+        <p>Le <abbr title="Software Development Kit">SDK</abbr> PHP fournit un exemple complet : Keycloak, nginx et un serveur MCP qui valide des jetons JWT.</p>
         <pre><code class="language-bash">docker compose up -d
 curl http://localhost:8000/.well-known/oauth-protected-resource
 curl -i -X POST http://localhost:8000/mcp       # 401 Unauthorized

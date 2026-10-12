@@ -121,7 +121,7 @@
             <li>elle transporte ce que le serveur veut retrouver : réponses précédentes, étape atteinte…</li>
             <li>elle passe par le client : <mark>elle doit être signée, et elle n'est pas chiffrée</mark></li>
         </ul>
-        <p>Le SDK PHP la signe avec une clé HMAC, à configurer dès qu'un tool pose plusieurs questions :</p>
+        <p>Le <abbr title="Software Development Kit">SDK</abbr> PHP la signe avec une clé HMAC, à configurer dès qu'un tool pose plusieurs questions :</p>
         <div class="tabs-container">
             <ul class="tabs-buttons-container">
                 <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
@@ -263,7 +263,7 @@
                 <li>Modifiez <code>close_ticket</code> pour demander confirmation avec <code>elicit()</code> (<code>RequestContext</code> est dans <code>Mcp\Server</code>, les schémas dans <code>Mcp\Schema\Elicitation</code>).</li>
                 <li>Dans VS Code, demandez à Copilot de fermer un ticket : acceptez, refusez puis annulez.</li>
                 <li>Vérifiez dans la base que seul l'accord ferme le ticket.</li>
-                <li>Au chapitre suivant, rejouez le scénario en HTTP avec l'Inspector en ère <code>modern</code> pour observer l'échange MRTR.</li>
+                <li>Au chapitre suivant, rejouez le scénario en HTTP avec l'Inspector en ère <code>modern</code> pour observer l'échange <abbr title="Multi Round-Trip Request">MRTR</abbr>.</li>
                 <li>Bonus : <code>create_ticket</code> demande une priorité (<code>low</code>, <code>normal</code>, <code>high</code>) si elle n'est pas fournie.</li>
             </ol>
         </div>

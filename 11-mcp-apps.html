@@ -16,7 +16,7 @@
                 <tr><th>Extension officielle</th><th>Rôle</th></tr>
             </thead>
             <tbody>
-                <tr><td><strong>MCP Apps</strong></td><td>Interfaces HTML interactives affichées dans la conversation</td></tr>
+                <tr><td><strong><abbr title="Model Context Protocol">MCP</abbr> Apps</strong></td><td>Interfaces HTML interactives affichées dans la conversation</td></tr>
                 <tr><td><strong>Tasks</strong></td><td>Opérations longues, suivies par interrogation</td></tr>
                 <tr><td><strong>Skills</strong></td><td>Instructions et fichiers de workflow servis par un serveur</td></tr>
                 <tr><td><strong>Auth</strong></td><td>Client credentials, autorisation gérée par l'entreprise</td></tr>
@@ -95,7 +95,7 @@
 │◄────────────────────────────────────────────────│                                                 │
 │ tools/call relayé par le host                   │                                                 │
 │──────────────────────────────────────────────────────────────────────────────────────────────────►│</code></pre>
-        <p>La vue et le host communiquent par <code>postMessage</code> avec des messages JSON-RPC : <code>ui/initialize</code>, <code>ui/notifications/tool-result</code>, <code>tools/call</code>…</p>
+        <p>La vue et le host communiquent par <code>postMessage</code> avec des messages <abbr title="JSON Remote Procedure Call">JSON-RPC</abbr> : <code>ui/initialize</code>, <code>ui/notifications/tool-result</code>, <code>tools/call</code>…</p>
         <footer>
             <a href="https://github.com/modelcontextprotocol/ext-apps" target="_blank" class="info">ext-apps</a>
         </footer>
@@ -298,7 +298,7 @@ exit(Server::builder()
                 </div>
             </div>
         </div>
-        <p>Pour des applications plus riches, le SDK TypeScript <code>@modelcontextprotocol/ext-apps</code> gère le protocole de la vue.</p>
+        <p>Pour des applications plus riches, le <abbr title="Software Development Kit">SDK</abbr> TypeScript <code>@modelcontextprotocol/ext-apps</code> gère le protocole de la vue.</p>
         <footer>
             <a href="https://modelcontextprotocol.io/extensions/apps/build" target="_blank" class="info">Build an MCP App</a>
         </footer>

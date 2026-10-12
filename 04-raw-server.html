@@ -6,7 +6,7 @@
 
     <section>
         <h3>Objectif</h3>
-        <p>Avant d'utiliser un SDK, écrivons un serveur MCP <strong>à la main</strong>, en PHP pur, pour voir le protocole à nu.</p>
+        <p>Avant d'utiliser un <abbr title="Software Development Kit">SDK</abbr>, écrivons un serveur <abbr title="Model Context Protocol">MCP</abbr> <strong>à la main</strong>, en PHP pur, pour voir le protocole à nu.</p>
         <ul>
             <li>Transport <strong>Streamable HTTP</strong>, servi par le serveur intégré de PHP (<code>php -S</code>)</li>
             <li>Ère <code>modern</code> : aucune poignée de main à implémenter</li>
@@ -19,7 +19,7 @@
 
     <section>
         <h3><code>index.php</code> : lire la requête</h3>
-        <p>Le corps de la requête POST contient un message JSON-RPC. La fonction <code>respond()</code> envoie la réponse et arrête le script.</p>
+        <p>Le corps de la requête POST contient un message <abbr title="JSON Remote Procedure Call">JSON-RPC</abbr>. La fonction <code>respond()</code> envoie la réponse et arrête le script.</p>
         <div class="tabs-container">
             <ul class="tabs-buttons-container">
                 <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>

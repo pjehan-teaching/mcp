@@ -75,7 +75,7 @@ class TicketTools
                 </div>
             </div>
         </div>
-        <p>Le conteneur du SDK instancie <code>TicketRepository</code> et l'injecte dans le constructeur.</p>
+        <p>Le conteneur du <abbr title="Software Development Kit">SDK</abbr> instancie <code>TicketRepository</code> et l'injecte dans le constructeur.</p>
     </section>
 
     <section>
@@ -221,7 +221,7 @@ class TicketTools
             <div class="col">
                 <h4>Erreur de protocole</h4>
                 <p>Tool inconnu, requête mal formée, erreur serveur.</p>
-                <p>Réponse JSON-RPC <code>error</code>, peu exploitable par le modèle.</p>
+                <p>Réponse <abbr title="JSON Remote Procedure Call">JSON-RPC</abbr> <code>error</code>, peu exploitable par le modèle.</p>
                 <p>Dans le SDK : toute exception, avec un message générique.</p>
             </div>
             <div class="col">
@@ -296,7 +296,7 @@ class TicketTools
                 </div>
             </div>
         </div>
-        <p>Fermer un ticket est une action <strong>destructrice</strong> : nous ajouterons une confirmation de l'utilisateur au chapitre MRTR et elicitation.</p>
+        <p>Fermer un ticket est une action <strong>destructrice</strong> : nous ajouterons une confirmation de l'utilisateur au chapitre <abbr title="Multi Round-Trip Request">MRTR</abbr> et elicitation.</p>
     </section>
 
     <section>
@@ -348,7 +348,7 @@ class TicketTools
 
     <section>
         <h3>Et l'état entre deux appels ?</h3>
-        <p>MCP est sans état : un serveur ne peut pas s'appuyer sur la connexion pour relier deux appels. Il renvoie un <strong>identifiant explicite</strong> que le modèle transmet ensuite :</p>
+        <p><abbr title="Model Context Protocol">MCP</abbr> est sans état : un serveur ne peut pas s'appuyer sur la connexion pour relier deux appels. Il renvoie un <strong>identifiant explicite</strong> que le modèle transmet ensuite :</p>
         <pre><code class="language-json">// → tools/call
 { "name": "create_basket", "arguments": {} }
 // ← résultat
