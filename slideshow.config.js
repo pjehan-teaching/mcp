@@ -4,6 +4,7 @@ module.exports = {
   javascripts: ['assets/js/script.js'],
   revealjs: {
     width: 1280,
-    height: 800
+    maxScale: 0.9,
+    margin: 0.1,
   }
 };
