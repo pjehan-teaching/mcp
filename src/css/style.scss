@@ -1,6 +1,12 @@
-@use "tabs";
-
 .reveal {
+
+    mark {
+        background: linear-gradient(180deg, rgba(255, 255, 255, 0) 60%, #FFC77D 40%);
+        color: inherit;
+        padding: 0 0.1em;
+        box-decoration-break: clone;
+        -webkit-box-decoration-break: clone;
+    }
 
     pre[class*="language-"] {
         width: 100%;

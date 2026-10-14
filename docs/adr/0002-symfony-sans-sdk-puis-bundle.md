@@ -1,0 +1,7 @@
+# Symfony, d'abord sans SDK, puis avec `symfony/mcp-bundle`
+
+Tout le code du cours est écrit en PHP avec Symfony, et les étudiants écrivent du code exécutable dès le chapitre 3. Le fil rouge (tickets, Doctrine + SQLite) est d'abord exposé par un `McpController` écrit à la main dans un projet `tickets-raw` : le chapitre « Le protocole » enrichit ce contrôleur règle après règle (en-têtes, version, erreurs, cache), puis le chapitre « Organiser les tools » extrait chaque tool dans une classe qui implémente `McpToolInterface`, taguée par `#[AutoconfigureTag]` et collectée par un registre via `#[AutowireIterator]`. Un second projet, `tickets`, reprend ensuite le fil rouge avec `symfony/mcp-bundle` pour mesurer ce que le SDK apporte.
+
+Ce choix s'appuie sur l'ère `modern` (ADR 0001) : sans poignée de main ni session, un serveur MCP n'est qu'un point d'entrée HTTP qu'un contrôleur Symfony implémente en une centaine de lignes. Écrire ce contrôleur fait comprendre le protocole avant de le cacher derrière des attributs ; le registre construit à la main reproduit l'architecture du SDK (services découverts automatiquement, registre, point d'entrée générique).
+
+**Conséquence** : le serveur `tickets-raw` ne parle que l'ère `modern` et ne peut pas être branché dans VS Code, qui ne parle que l'ère `legacy` en septembre 2026 ; il se teste avec `curl` et l'Inspector (`"protocolEra": "modern"`). VS Code n'est utilisé qu'à partir du projet `tickets`, que le bundle sert dans les deux ères sur la même URL.

@@ -10,6 +10,7 @@ import 'prismjs/components/prism-typescript';
 import 'prismjs/components/prism-python';
 import 'prismjs/components/prism-sql';
 import 'prismjs/components/prism-yaml';
+import 'prismjs/components/prism-twig';
 
 // Plugins
 import 'prismjs/plugins/line-numbers/prism-line-numbers';

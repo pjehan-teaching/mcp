@@ -1,0 +1,176 @@
+<section id="transports">
+
+    <section>
+        <h2>Transports et déploiement</h2>
+    </section>
+
+    <section>
+        <h3>Un serveur, deux transports</h3>
+        <table>
+            <thead>
+                <tr><th></th><th>Streamable HTTP</th><th>stdio</th></tr>
+            </thead>
+            <tbody>
+                <tr><td>Lancement</td><td>serveur web, route <code>/mcp</code></td><td><code>php bin/console mcp:server</code>, lancé par le client</td></tr>
+                <tr><td>Clients</td><td>plusieurs, locaux ou distants</td><td>un seul, sur la même machine</td></tr>
+                <tr><td>Ères servies</td><td><code>legacy</code> et <code>modern</code></td><td><code>legacy</code> uniquement (SDK 0.8)</td></tr>
+                <tr><td>Configuration</td><td><code>transports.http</code> (activé par défaut)</td><td><code>transports.stdio</code> (désactivé par défaut)</td></tr>
+            </tbody>
+        </table>
+        <p>Le code des tools, resources et prompts est <strong>le même</strong> quel que soit le transport.</p>
+        <footer>
+            <a href="https://symfony.com/doc/current/ai/bundles/mcp-bundle.html#transport-types" target="_blank" class="info">Transport types</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Activer stdio</h3>
+        <div class="container">
+            <div class="col">
+                <pre><code class="language-yaml"># config/packages/mcp.yaml
+mcp:
+    servers:
+        default:
+            # …
+            transports:
+                stdio: true
+                http: true</code></pre>
+            </div>
+            <div class="col">
+                <pre><code class="language-json">{
+    "servers": {
+        "tickets-stdio": {
+            "type": "stdio",
+            "command": "php",
+            "args": ["${workspaceFolder}/bin/console", "mcp:server"]
+        }
+    }
+}</code></pre>
+            </div>
+        </div>
+        <pre><code class="language-bash">npx @modelcontextprotocol/inspector --cli php bin/console mcp:server --method tools/list</code></pre>
+        <p class="console-error">En stdio, un <code>dump()</code> ou un <code>echo</code> corrompt le flux : journalisez sur le canal <code>mcp</code> de Monolog.</p>
+        <footer>
+            <a href="https://code.visualstudio.com/docs/copilot/reference/mcp-configuration" target="_blank" class="info">MCP configuration reference</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Une seule URL, deux ères</h3>
+        <p>Le transport HTTP examine <strong>chaque requête</strong> et choisit l'ère qui y répond :</p>
+        <table>
+            <thead>
+                <tr><th>Indice</th><th>Ère</th></tr>
+            </thead>
+            <tbody>
+                <tr><td><code>_meta</code> annonce <code>2026-07-28</code></td><td><code>modern</code></td></tr>
+                <tr><td><code>initialize</code>, ou en-tête <code>Mcp-Session-Id</code> d'une session ouverte</td><td><code>legacy</code></td></tr>
+            </tbody>
+        </table>
+        <ul>
+            <li>L'ère <code>legacy</code> a besoin de <strong>sessions</strong> : le bundle les stocke dans <code>var/cache/&lt;env&gt;/mcp-sessions/default</code> par défaut</li>
+            <li>L'ère <code>modern</code> n'en a pas besoin : chaque requête se suffit à elle-même</li>
+        </ul>
+        <footer>
+            <a href="https://symfony.com/doc/current/ai/bundles/mcp-bundle.html#the-modern-era" target="_blank" class="info">The Modern Era</a>
+            <a href="https://symfony.com/doc/current/ai/bundles/mcp-bundle.html#session-storage" target="_blank" class="info">Session storage</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Déployer plusieurs instances</h3>
+        <p>Derrière un répartiteur de charge, n'importe quelle instance peut recevoir n'importe quelle requête :</p>
+        <table>
+            <thead>
+                <tr><th>Besoin</th><th>Configuration</th></tr>
+            </thead>
+            <tbody>
+                <tr><td>Ère <code>modern</code></td><td>rien : aucun état côté serveur</td></tr>
+                <tr><td>Sessions de l'ère <code>legacy</code></td><td><code>session: { store: cache }</code> (Redis…)</td></tr>
+                <tr><td>Elicitation à plusieurs questions</td><td>même <code>request_state.key</code> partout</td></tr>
+                <tr><td><code>subscriptions/listen</code> sous PHP-FPM</td><td><code>subscriptions: { bus: cache }</code></td></tr>
+            </tbody>
+        </table>
+        <p><mark>Plus les clients passeront à l'ère <code>modern</code>, plus le déploiement deviendra celui d'une API HTTP classique.</mark></p>
+        <footer>
+            <a href="https://symfony.com/doc/current/ai/bundles/mcp-bundle.html#configuration" target="_blank" class="info">Bundle configuration</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Accepter d'autres domaines</h3>
+        <p>Par défaut, le transport n'accepte que les requêtes dont l'en-tête <code>Origin</code> ou <code>Host</code> désigne <code>localhost</code> : c'est la protection contre le <strong>DNS rebinding</strong> exigée par la spécification.</p>
+        <pre><code class="language-yaml">mcp:
+    servers:
+        default:
+            http:
+                path: /mcp
+                allowed_hosts: ['tickets.example.com']</code></pre>
+        <ul>
+            <li><code>allowed_hosts</code> <strong>remplace</strong> la liste par défaut</li>
+            <li><code>allowed_hosts: false</code> désactive la protection, par exemple derrière un proxy qui valide déjà <code>Host</code></li>
+        </ul>
+        <p>C'est l'équivalent du <code>McpOriginListener</code> écrit à la main dans <code>tickets-raw</code>.</p>
+        <footer>
+            <a href="https://symfony.com/doc/current/ai/bundles/mcp-bundle.html#dns-rebinding-protection" target="_blank" class="warning">DNS rebinding protection</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Plusieurs serveurs dans une application</h3>
+        <pre style="font-size: 0.5em;"><code class="language-yaml">mcp:
+    servers:
+        public:
+            name: 'tickets'
+            http: { path: /mcp }
+            registry:
+                tools: ['App\Mcp\ReadOnly\']
+        support:
+            name: 'tickets-support'
+            http: { path: /mcp/support }
+            registry: '*'
+
+# config/packages/security.yaml
+security:
+    access_control:
+        - { path: ^/mcp/support, roles: ROLE_SUPPORT }</code></pre>
+        <ul>
+            <li>Chaque serveur a sa route, son identité et sa liste de capacités (<code>registry</code>)</li>
+            <li>L'accès se protège avec la sécurité Symfony habituelle</li>
+        </ul>
+        <footer>
+            <a href="https://symfony.com/doc/current/ai/bundles/mcp-bundle.html#multiple-servers" target="_blank" class="info">Multiple servers</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Restreindre les versions</h3>
+        <p>Par défaut, le serveur accepte toutes les versions connues du <abbr title="Software Development Kit">SDK</abbr>. <code>protocol_versions</code> limite cette liste :</p>
+        <pre><code class="language-yaml">mcp:
+    servers:
+        default:
+            protocol_versions: ['2025-11-25', '2026-07-28']</code></pre>
+        <ul>
+            <li>Ne lister que des versions <code>legacy</code> refuse l'ère <code>modern</code></li>
+            <li>Utile si un handler s'appuie encore sur <em>Sampling</em> ou <em>Roots</em>, supprimés en ère <code>modern</code></li>
+        </ul>
+        <footer>
+            <a href="https://symfony.com/doc/current/ai/bundles/mcp-bundle.html#the-modern-era" target="_blank" class="info">The Modern Era</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Exercice</h3>
+        <p>Servez le fil rouge sur les deux transports.</p>
+        <div class="instructions">
+            <ol>
+                <li>Activez le transport stdio et listez les tools avec l'Inspector en ligne de commande.</li>
+                <li>Déclarez <code>tickets-stdio</code> dans <code>.vscode/mcp.json</code> à côté du serveur HTTP : comparez les deux dans Copilot.</li>
+                <li>Ouvrez <code>var/cache/dev/mcp-sessions/default</code> après une connexion de VS Code, puis après un appel en ère <code>modern</code>.</li>
+                <li>Envoyez avec <code>curl</code> une requête portant <code>-H 'Origin: https://evil.example'</code> : quel code HTTP obtenez-vous ?</li>
+                <li>Bonus : déclarez un second serveur <code>/mcp/support</code> qui n'expose que les tools d'écriture.</li>
+            </ol>
+        </div>
+    </section>
+
+</section>

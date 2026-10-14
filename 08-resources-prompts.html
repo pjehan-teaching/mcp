@@ -40,16 +40,12 @@
 
     <section>
         <h3>Déclarer une resource template</h3>
-        <div class="tabs-container">
-            <ul class="tabs-buttons-container">
-                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
-            </ul>
-            <div class="tabs">
-                <div class="tab-php active">
-                    <pre data-line="19-23" data-start="10" class="line-numbers"><code class="language-php">class TicketResources
+        <pre style="font-size: 0.45em;" data-line="20-29" data-start="12" class="line-numbers"><code class="language-php">final class TicketResources
 {
-    public function __construct(private TicketRepository $tickets)
-    {
+    public function __construct(
+        private readonly TicketRepository $tickets,
+        private readonly NormalizerInterface $normalizer,
+    ) {
     }
 
     /**
@@ -58,11 +54,10 @@
     #[McpResourceTemplate(uriTemplate: 'ticket://{id}', name: 'ticket', mimeType: 'application/json')]
     public function ticket(string $id): array
     {
-        return $this-&gt;tickets-&gt;find((int) $id) ?? throw new ResourceNotFoundException("ticket://$id");
+        $ticket = $this-&gt;tickets-&gt;find((int) $id) ?? throw new ResourceNotFoundException("ticket://$id");
+
+        return $this-&gt;normalizer-&gt;normalize($ticket);
     }</code></pre>
-                </div>
-            </div>
-        </div>
         <p>Les variables de l'URI sont liées aux paramètres <strong>par leur nom</strong> ; une variable ne peut pas contenir <code>/</code>.</p>
     </section>
 
@@ -106,20 +101,15 @@
 
     <section>
         <h3>Déclarer un prompt</h3>
-        <div class="tabs-container">
-            <ul class="tabs-buttons-container">
-                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
-            </ul>
-            <div class="tabs">
-                <div class="tab-php active">
-                    <pre data-line="28-30" data-start="25" class="line-numbers"><code class="language-php">    /**
+        <pre style="font-size: 0.5em;" data-line="34-36" data-start="31" class="line-numbers"><code class="language-php">    /**
      * Trie les tickets ouverts par priorité.
      */
     #[McpPrompt(name: 'triage_tickets')]
     public function triage(
         #[CompletionProvider(values: ['technique', 'facturation'])] string $focus = 'technique',
     ): array {
-        $tickets = json_encode($this-&gt;tickets-&gt;findAll('open'), JSON_UNESCAPED_UNICODE);
+        $open = $this-&gt;normalizer-&gt;normalize($this-&gt;tickets-&gt;findBy(['status' =&gt; 'open']));
+        $tickets = json_encode($open, JSON_UNESCAPED_UNICODE);
 
         return [
             ['role' =&gt; 'user', 'content' =&gt; "Voici les tickets ouverts : $tickets\n"
@@ -127,9 +117,6 @@
                 . 'puis propose un assigné pour chacun.'],
         ];
     }</code></pre>
-                </div>
-            </div>
-        </div>
         <footer>
             <a href="https://github.com/modelcontextprotocol/php-sdk/blob/main/docs/servers/prompts.md" target="_blank" class="info">SDK : Prompts</a>
         </footer>
@@ -179,33 +166,23 @@
     </section>
 
     <section>
-        <h3>Mettre en cache</h3>
-        <p><code>server/discover</code>, les listes et <code>resources/read</code> indiquent :</p>
-        <ul>
-            <li><code>ttlMs</code> : durée de validité en millisecondes (<code>0</code> : toujours périmée)</li>
-            <li><code>cacheScope</code> : <code>public</code> ou <code>private</code></li>
-        </ul>
-        <div class="tabs-container">
-            <ul class="tabs-buttons-container">
-                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
-            </ul>
-            <div class="tabs">
-                <div class="tab-php active">
-                    <pre><code class="language-php">use Mcp\Schema\Enum\CacheScope;
-use Mcp\Server\Wire\CachePolicy;
-
-Server::builder()
-    // …
-    -&gt;setCachePolicy(
-        CachePolicy::default(30_000)
-            -&gt;withMethod('tools/list', 3_600_000, CacheScope::Public)
-            -&gt;withMethod('server/discover', 3_600_000, CacheScope::Public),
-    )</code></pre>
-                </div>
-            </div>
-        </div>
+        <h3>Mettre en cache avec le bundle</h3>
+        <p>Rappel du chapitre « Le protocole » : <code>server/discover</code>, les listes et <code>resources/read</code> indiquent leur durée de validité (<code>ttlMs</code>) et leur portée (<code>cacheScope</code>).</p>
+        <p>Le bundle refuse le cache par défaut (<code>ttlMs: 0</code>). On l'active par méthode dans <code>mcp.yaml</code> :</p>
+        <pre><code class="language-yaml">mcp:
+    servers:
+        default:
+            # …
+            cache:
+                ttl_ms: 0
+                scope: private
+                methods:
+                    'server/discover': { ttl_ms: 3600000, scope: public }
+                    'tools/list': { ttl_ms: 3600000, scope: public }</code></pre>
+        <p><mark>N'utilisez <code>public</code> que pour des réponses identiques pour tous les utilisateurs.</mark></p>
         <footer>
             <a href="https://modelcontextprotocol.io/specification/2026-07-28/server/utilities/caching" target="_blank" class="info">Caching</a>
+            <a href="https://symfony.com/doc/current/ai/bundles/mcp-bundle.html#cache-hints" target="_blank" class="info">Bundle : cache hints</a>
         </footer>
     </section>
 
@@ -225,8 +202,10 @@ Server::builder()
   }
 }</code></pre>
         <p>Le serveur confirme par <code>notifications/subscriptions/acknowledged</code>, puis envoie les notifications demandées sur ce flux SSE, qui reste ouvert.</p>
+        <p>Avec le bundle, la diffusion passe par un <strong>bus</strong> (<code>subscriptions.bus</code> dans <code>mcp.yaml</code>) : <code>cache</code> sous PHP-FPM, où le processus qui publie n'est pas celui qui tient le flux.</p>
         <footer>
             <a href="https://modelcontextprotocol.io/specification/2026-07-28/basic/patterns/subscriptions" target="_blank" class="info">Subscriptions</a>
+            <a href="https://symfony.com/doc/current/ai/bundles/mcp-bundle.html#subscriptions" target="_blank" class="info">Bundle : subscriptions</a>
         </footer>
     </section>
 
@@ -235,12 +214,12 @@ Server::builder()
         <p>Enrichissez le fil rouge avec une resource et un prompt.</p>
         <div class="instructions">
             <ol>
-                <li>Créez <code>src/TicketResources.php</code> avec la resource template <code>ticket://{id}</code>.</li>
+                <li>Créez <code>src/Mcp/TicketResources.php</code> avec la resource template <code>ticket://{id}</code>.</li>
                 <li>Lisez <code>ticket://2</code> puis <code>ticket://99</code> dans l'Inspector : observez le contenu et l'erreur.</li>
                 <li>Ajoutez le prompt <code>triage_tickets</code> avec l'autocomplétion de <code>focus</code>.</li>
                 <li>Dans VS Code, ajoutez <code>ticket://1</code> au contexte, puis lancez le prompt avec <code>/</code>.</li>
                 <li>Bonus : une resource statique <code>tickets://stats</code> qui compte les tickets par statut.</li>
-                <li>Bonus : une politique de cache qui garde <code>tools/list</code> une heure.</li>
+                <li>Bonus : configurez le cache pour garder <code>tools/list</code> une heure, et vérifiez <code>ttlMs</code> avec <code>curl</code>.</li>
             </ol>
         </div>
     </section>

@@ -121,19 +121,17 @@
             <li>elle transporte ce que le serveur veut retrouver : réponses précédentes, étape atteinte…</li>
             <li>elle passe par le client : <mark>elle doit être signée, et elle n'est pas chiffrée</mark></li>
         </ul>
-        <p>Le <abbr title="Software Development Kit">SDK</abbr> PHP la signe avec une clé HMAC, à configurer dès qu'un tool pose plusieurs questions :</p>
-        <div class="tabs-container">
-            <ul class="tabs-buttons-container">
-                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
-            </ul>
-            <div class="tabs">
-                <div class="tab-php active">
-                    <pre><code class="language-php">-&gt;setRequestState($_ENV['MCP_REQUEST_STATE_KEY'], ttl: 600)</code></pre>
-                </div>
-            </div>
-        </div>
+        <p>Le <abbr title="Software Development Kit">SDK</abbr> la signe avec une clé HMAC (32 octets minimum), à configurer dès qu'un tool pose <strong>plusieurs</strong> questions :</p>
+        <pre><code class="language-yaml"># config/packages/mcp.yaml
+mcp:
+    servers:
+        default:
+            request_state:
+                key: '%env(MCP_REQUEST_STATE_KEY)%'
+                ttl: 600</code></pre>
+        <p>Toutes les instances du serveur doivent partager la même clé.</p>
         <footer>
-            <a href="https://github.com/modelcontextprotocol/php-sdk/blob/main/docs/handlers/input-required.md" target="_blank" class="info">SDK : Asking for input</a>
+            <a href="https://symfony.com/doc/current/ai/bundles/mcp-bundle.html#request-state" target="_blank" class="info">Bundle : request state</a>
         </footer>
     </section>
 
@@ -193,22 +191,16 @@
 
     <section>
         <h3>Elicitation avec le SDK</h3>
-        <div class="tabs-container">
-            <ul class="tabs-buttons-container">
-                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
-            </ul>
-            <div class="tabs">
-                <div class="tab-php active">
-                    <pre style="font-size: 0.45em;" data-line="77-87" data-start="69" class="line-numbers"><code class="language-php">    /**
+        <pre style="font-size: 0.45em;" data-line="94-104" data-start="86" class="line-numbers"><code class="language-php">    /**
      * Ferme un ticket résolu, après confirmation de l'utilisateur.
      */
     #[McpTool(name: 'close_ticket', annotations: new ToolAnnotations(destructiveHint: true))]
     public function close(RequestContext $context, int $id): string
     {
-        $ticket = $this-&gt;get($id);
+        $ticket = $this-&gt;find($id);
 
         $answer = $context-&gt;getClientGateway()-&gt;elicit(
-            "Fermer le ticket #$id « {$ticket['title']} » ?",
+            "Fermer le ticket #$id « {$ticket-&gt;getTitle()} » ?",
             new ElicitationSchema(
                 ['confirm' =&gt; new BooleanSchemaDefinition(title: 'Confirmer la fermeture')],
                 required: ['confirm'],
@@ -219,13 +211,11 @@
             return "Fermeture du ticket #$id annulée par l'utilisateur.";
         }
 
-        $this-&gt;tickets-&gt;close($id);
+        $ticket-&gt;setStatus('closed');
+        $this-&gt;em-&gt;flush();
+
         return "Ticket #$id fermé.";
-    }
-}</code></pre>
-                </div>
-            </div>
-        </div>
+    }</code></pre>
     </section>
 
     <section>
@@ -236,7 +226,7 @@
             <li>ère <code>legacy</code> (VS Code aujourd'hui) : le SDK envoie une vraie requête <code>elicitation/create</code> et attend la réponse</li>
         </ul>
         <p><mark>Une méthode qui pose une question peut être exécutée plusieurs fois : placez les effets de bord après la dernière question.</mark></p>
-        <p>Ici, <code>get()</code> ne fait que lire : seul <code>close()</code> modifie la base, après la confirmation.</p>
+        <p>Ici, <code>find()</code> ne fait que lire : seul <code>flush()</code> modifie la base, après la confirmation.</p>
         <footer>
             <a href="https://github.com/modelcontextprotocol/php-sdk/blob/main/docs/handlers/input-required.md" target="_blank" class="info">SDK : Asking for input</a>
         </footer>
@@ -263,7 +253,7 @@
                 <li>Modifiez <code>close_ticket</code> pour demander confirmation avec <code>elicit()</code> (<code>RequestContext</code> est dans <code>Mcp\Server</code>, les schémas dans <code>Mcp\Schema\Elicitation</code>).</li>
                 <li>Dans VS Code, demandez à Copilot de fermer un ticket : acceptez, refusez puis annulez.</li>
                 <li>Vérifiez dans la base que seul l'accord ferme le ticket.</li>
-                <li>Au chapitre suivant, rejouez le scénario en HTTP avec l'Inspector en ère <code>modern</code> pour observer l'échange <abbr title="Multi Round-Trip Request">MRTR</abbr>.</li>
+                <li>Rejouez le scénario dans l'interface de l'Inspector en ère <code>modern</code> et retrouvez l'échange <code>input_required</code> dans l'historique.</li>
                 <li>Bonus : <code>create_ticket</code> demande une priorité (<code>low</code>, <code>normal</code>, <code>high</code>) si elle n'est pas fournie.</li>
             </ol>
         </div>

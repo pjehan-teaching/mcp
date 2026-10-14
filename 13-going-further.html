@@ -117,36 +117,52 @@
 
     <section>
         <h3>Construire un client</h3>
-        <div class="tabs-container">
-            <ul class="tabs-buttons-container">
-                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
-            </ul>
-            <div class="tabs">
-                <div class="tab-php active">
-                    <pre style="font-size: 0.5em;" class="line-numbers"><code class="language-php">&lt;?php
+        <p>Le bundle sait aussi <strong>consommer</strong> des serveurs MCP, en HTTP ou en stdio :</p>
+        <pre><code class="language-yaml"># config/packages/mcp.yaml
+mcp:
+    clients:
+        support:
+            servers:
+                tickets:
+                    transport: http
+                    url: 'http://localhost:8000/mcp'</code></pre>
+        <ul>
+            <li>Le client est injectable via <code>McpClientInterface</code> (paramètre nommé ou <code>#[Target('support')]</code>)</li>
+            <li>La connexion s'ouvre à la première requête, sans appel à <code>connect()</code></li>
+            <li>Le transport HTTP utilise <code>symfony/http-client</code></li>
+        </ul>
+        <footer>
+            <a href="https://symfony.com/doc/current/ai/bundles/mcp-bundle.html#act-as-client" target="_blank" class="info">Act as Client</a>
+        </footer>
+    </section>
 
-require __DIR__ . '/vendor/autoload.php';
+    <section>
+        <h3>Construire un client</h3>
+        <pre style="font-size: 0.45em;"><code class="language-php">#[AsCommand('app:tickets:summary', 'Interroge le serveur MCP des tickets')]
+final class TicketsSummaryCommand
+{
+    public function __construct(private readonly McpClientInterface $client)
+    {
+    }
 
-use Mcp\Client;
-use Mcp\Client\Transport\StdioTransport;
+    public function __invoke(SymfonyStyle $io): int
+    {
+        $tickets = $this-&gt;client-&gt;get('tickets');
 
-$client = Client::builder()
-    -&gt;setClientInfo('tickets-cli', '1.0.0')
-    -&gt;build();
+        foreach ($tickets-&gt;getTools() as $tool) {
+            $io-&gt;writeln("- {$tool-&gt;name} : {$tool-&gt;description}");
+        }
 
-$client-&gt;connect(new StdioTransport(command: 'php', args: [__DIR__ . '/server.php']));
+        $result = $tickets-&gt;callTool('get_ticket', ['id' =&gt; 2]);
+        $io-&gt;writeln($result-&gt;content[0]-&gt;text);
 
-foreach ($client-&gt;listTools()-&gt;tools as $tool) {
-    echo "- {$tool-&gt;name} : {$tool-&gt;description}\n";
-}
-
-$result = $client-&gt;callTool('get_ticket', ['id' =&gt; 2]);
-echo $result-&gt;content[0]-&gt;text, "\n";
-
-$client-&gt;disconnect();</code></pre>
-                </div>
-            </div>
-        </div>
+        return Command::SUCCESS;
+    }
+}</code></pre>
+        <p>Lancée par <code>php bin/console app:tickets:summary</code>, la commande liste les tools du serveur puis appelle <code>get_ticket</code>.</p>
+        <footer>
+            <a href="https://symfony.com/doc/current/ai/bundles/mcp-bundle.html#using-a-client" target="_blank" class="info">Using a Client</a>
+        </footer>
     </section>
 
     <section>
@@ -168,19 +184,19 @@ $client-&gt;disconnect();</code></pre>
 
     <section>
         <h3>Bonus : un vrai serveur d'autorisation</h3>
-        <p>Protégez le fil rouge avec OAuth en vous appuyant sur l'exemple <code>oauth-keycloak</code> du <abbr title="Software Development Kit">SDK</abbr> PHP :</p>
+        <p>Protégez le fil rouge avec OAuth en vous appuyant sur Keycloak et la sécurité Symfony (chapitre Sécurité) :</p>
         <div class="instructions">
             <ol>
-                <li>Lancez Keycloak avec Docker et importez le realm fourni.</li>
-                <li>Publiez les métadonnées RFC 9728 avec <code>ProtectedResourceMetadataMiddleware</code>.</li>
-                <li>Validez les jetons avec <code>AuthorizationMiddleware</code> et <code>JwtTokenValidator</code> (émetteur, audience).</li>
-                <li>Réservez <code>close_ticket</code> et <code>assign_ticket</code> à un scope d'écriture.</li>
+                <li>Lancez Keycloak avec Docker, créez un realm <code>mcp</code> et un client dont l'audience est l'URL du serveur MCP.</li>
+                <li>Publiez les métadonnées RFC 9728 sur <code>/.well-known/oauth-protected-resource</code>.</li>
+                <li>Protégez <code>/mcp</code> avec le firewall <code>access_token</code> et le handler <code>oidc</code> (émetteur, audience).</li>
+                <li>Réservez <code>close_ticket</code> et <code>assign_ticket</code> à un rôle ou un scope d'écriture.</li>
                 <li>Connectez-vous depuis l'Inspector et observez le flux d'autorisation.</li>
             </ol>
         </div>
         <footer>
-            <a href="https://github.com/modelcontextprotocol/php-sdk/tree/main/examples/server/oauth-keycloak" target="_blank" class="info">Exemple oauth-keycloak</a>
-            <a href="https://github.com/modelcontextprotocol/php-sdk/blob/main/docs/run/authorization.md" target="_blank" class="info">SDK : Authorization</a>
+            <a href="https://symfony.com/doc/current/security/access_token.html" target="_blank" class="info">Symfony : access tokens</a>
+            <a href="https://modelcontextprotocol.io/docs/2026-07-28/tools/inspector/authorization" target="_blank" class="info">Inspector : authorization</a>
         </footer>
     </section>
 
@@ -189,7 +205,7 @@ $client-&gt;disconnect();</code></pre>
         <ul>
             <li><a href="https://modelcontextprotocol.io" target="_blank">modelcontextprotocol.io</a> : documentation, et son <a href="https://modelcontextprotocol.io/llms.txt" target="_blank">index pour les agents</a></li>
             <li><a href="https://modelcontextprotocol.io/specification/latest" target="_blank">Spécification courante</a> et <a href="https://modelcontextprotocol.io/specification/2026-07-28/changelog" target="_blank">changements de la version 2026-07-28</a></li>
-            <li><a href="https://github.com/modelcontextprotocol/php-sdk" target="_blank">SDK PHP</a> et ses exemples</li>
+            <li><a href="https://github.com/modelcontextprotocol/php-sdk" target="_blank">SDK PHP</a> et le <a href="https://symfony.com/doc/current/ai/bundles/mcp-bundle.html" target="_blank">MCP Bundle de Symfony</a></li>
             <li><a href="https://modelcontextprotocol.io/docs/tools/inspector" target="_blank">MCP Inspector</a></li>
             <li><a href="https://modelcontextprotocol.io/extensions/overview" target="_blank">Extensions officielles</a></li>
             <li><a href="https://modelcontextprotocol.io/docs/tutorials/security/security_best_practices" target="_blank">Bonnes pratiques de sécurité</a></li>

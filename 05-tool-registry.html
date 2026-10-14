@@ -1,0 +1,271 @@
+<section id="tool-registry">
+
+    <section>
+        <h2>Organiser les tools</h2>
+    </section>
+
+    <section>
+        <h3>Un contrôleur qui grossit</h3>
+        <p>Chaque nouveau tool ajoute à <code>McpController</code> :</p>
+        <ul>
+            <li>une méthode qui le <strong>décrit</strong> (<code>listTicketsTool()</code>)</li>
+            <li>une méthode qui l'<strong>exécute</strong> (<code>listTickets()</code>)</li>
+            <li>un cas de plus dans <code>tools/list</code>, <code>tools/call</code> et la vérification du nom</li>
+            <li>les dépendances de chaque tool dans le constructeur</li>
+        </ul>
+        <p>Avec dix tools, le contrôleur mélange le <strong>transport</strong> (en-têtes, version, JSON-RPC) et le <strong>métier</strong> (les tickets).</p>
+        <p><mark>Une classe, une responsabilité : le contrôleur gère le protocole, chaque tool devient un service.</mark></p>
+    </section>
+
+    <section>
+        <h3>Le plan</h3>
+        <pre style="font-size: 0.6em;"><code class="language-none">src/
+├── Controller/
+│   └── McpController.php        protocole : en-têtes, version, JSON-RPC
+└── Mcp/
+    ├── McpToolInterface.php     contrat commun à tous les tools
+    ├── McpToolRegistry.php      collecte les tools, les liste et les appelle
+    └── Tool/
+        ├── ListTicketsTool.php  un tool = une classe
+        └── GetTicketTool.php</code></pre>
+        <ol>
+            <li>Un <strong>contrat</strong> : une interface que tout tool implémente</li>
+            <li>Un <strong>registre</strong> qui reçoit automatiquement tous les tools</li>
+            <li>Un <strong>contrôleur</strong> qui délègue au registre</li>
+        </ol>
+    </section>
+
+    <section>
+        <h3>Un contrat commun</h3>
+        <pre data-line="7" class="line-numbers"><code class="language-php">&lt;?php
+
+namespace App\Mcp;
+
+use Symfony\Component\DependencyInjection\Attribute\AutoconfigureTag;
+
+#[AutoconfigureTag('app.mcp_tool')]
+interface McpToolInterface
+{
+    /** Définition envoyée par tools/list : name, description, inputSchema */
+    public function definition(): array;
+
+    /** Résultat renvoyé par tools/call : content (+ isError) */
+    public function call(array $arguments): array;
+}</code></pre>
+        <p>Les deux méthodes reprennent exactement les deux méthodes privées du contrôleur.</p>
+    </section>
+
+    <section>
+        <h3><code>#[AutoconfigureTag]</code></h3>
+        <p>Posé sur une interface, l'attribut ajoute un <strong>tag</strong> à <strong>tout service qui l'implémente</strong>.</p>
+        <ul>
+            <li>Les classes de <code>src/</code> sont des services <strong>autoconfigurés</strong> par défaut (<code>config/services.yaml</code>)</li>
+            <li>Créer une classe qui implémente <code>McpToolInterface</code> suffit : aucune configuration à écrire</li>
+            <li>Un tag est une étiquette qui permet de retrouver un groupe de services</li>
+        </ul>
+        <pre><code class="language-bash">php bin/console debug:container --tag=app.mcp_tool</code></pre>
+        <pre style="font-size: 0.6em;"><code class="language-none">  Service ID                     Class name
+  App\Mcp\Tool\GetTicketTool     App\Mcp\Tool\GetTicketTool
+  App\Mcp\Tool\ListTicketsTool   App\Mcp\Tool\ListTicketsTool</code></pre>
+        <footer>
+            <a href="https://symfony.com/doc/current/service_container/tags.html#autoconfiguring-tags" target="_blank" class="info">Autoconfiguring tags</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Un tool = une classe</h3>
+        <pre style="font-size: 0.4em;" data-line="9,11-14,17" class="line-numbers"><code class="language-php">&lt;?php
+
+namespace App\Mcp\Tool;
+
+use App\Mcp\McpToolInterface;
+use App\Repository\TicketRepository;
+use Symfony\Component\Serializer\SerializerInterface;
+
+final class ListTicketsTool implements McpToolInterface
+{
+    public function __construct(
+        private readonly TicketRepository $tickets,
+        private readonly SerializerInterface $serializer,
+    ) {
+    }
+
+    public function definition(): array
+    {
+        return [
+            'name' =&gt; 'list_tickets',
+            'description' =&gt; 'Liste les tickets de support, éventuellement filtrés par statut.',
+            'inputSchema' =&gt; [
+                'type' =&gt; 'object',
+                'properties' =&gt; [
+                    'status' =&gt; ['type' =&gt; 'string', 'enum' =&gt; ['open', 'closed']],
+                ],
+            ],
+        ];
+    }</code></pre>
+        <p>Chaque tool déclare <strong>ses propres</strong> dépendances : le contrôleur n'a plus besoin du dépôt ni du Serializer.</p>
+    </section>
+
+    <section>
+        <h3>Un tool = une classe</h3>
+        <pre style="font-size: 0.45em;" data-start="31" class="line-numbers"><code class="language-php">    public function call(array $arguments): array
+    {
+        $status = $arguments['status'] ?? null;
+        $tickets = $status ? $this-&gt;tickets-&gt;findBy(['status' =&gt; $status]) : $this-&gt;tickets-&gt;findAll();
+
+        return ['content' =&gt; [[
+            'type' =&gt; 'text',
+            'text' =&gt; $this-&gt;serializer-&gt;serialize($tickets, 'json'),
+        ]]];
+    }
+}</code></pre>
+        <p>Le corps de <code>call()</code> est celui de l'ancienne méthode <code>listTickets()</code>, sans aucune modification.</p>
+    </section>
+
+    <section>
+        <h3>Une erreur d'exécution : <code>GetTicketTool</code></h3>
+        <pre style="font-size: 0.38em;" data-line="34-36" data-start="17" class="line-numbers"><code class="language-php">    public function definition(): array
+    {
+        return [
+            'name' =&gt; 'get_ticket',
+            'description' =&gt; "Récupère le détail d'un ticket à partir de son identifiant.",
+            'inputSchema' =&gt; [
+                'type' =&gt; 'object',
+                'properties' =&gt; ['id' =&gt; ['type' =&gt; 'integer']],
+                'required' =&gt; ['id'],
+            ],
+        ];
+    }
+
+    public function call(array $arguments): array
+    {
+        $ticket = $this-&gt;tickets-&gt;find($arguments['id'] ?? 0);
+
+        if ($ticket === null) {
+            return ['isError' =&gt; true, 'content' =&gt; [['type' =&gt; 'text', 'text' =&gt; "Le ticket #{$arguments['id']} n'existe pas."]]];
+        }
+
+        return ['content' =&gt; [['type' =&gt; 'text', 'text' =&gt; $this-&gt;serializer-&gt;serialize($ticket, 'json')]]];
+    }
+}</code></pre>
+        <p>Un ticket introuvable n'est pas une erreur de protocole : c'est un <strong>résultat</strong> avec <code>isError: true</code>, que le modèle peut lire pour se corriger.</p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/server/tools#error-handling" target="_blank" class="info">Error handling</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Le registre</h3>
+        <pre style="font-size: 0.5em;" data-line="13" data-start="7" class="line-numbers"><code class="language-php">final class McpToolRegistry
+{
+    /** @var array&lt;string, McpToolInterface&gt; */
+    private array $tools = [];
+
+    /** @param iterable&lt;McpToolInterface&gt; $tools */
+    public function __construct(#[AutowireIterator('app.mcp_tool')] iterable $tools)
+    {
+        foreach ($tools as $tool) {
+            $this-&gt;tools[$tool-&gt;definition()['name']] = $tool;
+        }
+    }</code></pre>
+        <p><code>#[AutowireIterator]</code> injecte <strong>tous les services</strong> portant le tag <code>app.mcp_tool</code>, sans les lister.</p>
+        <footer>
+            <a href="https://symfony.com/doc/current/service_container/tags.html#reference-tagged-services" target="_blank" class="info">Reference tagged services</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Le registre</h3>
+        <pre style="font-size: 0.5em;" data-start="20" class="line-numbers"><code class="language-php">    public function has(string $name): bool
+    {
+        return isset($this-&gt;tools[$name]);
+    }
+
+    public function list(): array
+    {
+        return array_map(fn (McpToolInterface $tool) =&gt; $tool-&gt;definition(), array_values($this-&gt;tools));
+    }
+
+    public function call(string $name, array $arguments): array
+    {
+        return $this-&gt;tools[$name]-&gt;call($arguments);
+    }
+}</code></pre>
+        <p>Le registre range les tools par nom pour les retrouver lors de <code>tools/call</code>.</p>
+    </section>
+
+    <section>
+        <h3>Le contrôleur délègue</h3>
+        <pre style="font-size: 0.5em;"><code class="language-php">use App\Mcp\McpToolRegistry;
+
+// …
+
+    public function __construct(private readonly McpToolRegistry $tools)
+    {
+    }
+
+// …
+
+        if ($method === 'tools/call' &amp;&amp; !$this-&gt;tools-&gt;has($name)) {
+            return $this-&gt;error($id, -32602, "Unknown tool: $name");
+        }
+
+// … dans le match :
+
+            'tools/list' =&gt; ['tools' =&gt; $this-&gt;tools-&gt;list(), 'ttlMs' =&gt; 300_000, 'cacheScope' =&gt; 'public'],
+            'tools/call' =&gt; $this-&gt;tools-&gt;call($name, $params['arguments'] ?? []),</code></pre>
+        <p>Les méthodes <code>listTicketsTool()</code> et <code>listTickets()</code> disparaissent du contrôleur, ainsi que le dépôt et le Serializer injectés dans son constructeur.</p>
+    </section>
+
+    <section>
+        <h3>Ce que nous avons gagné</h3>
+        <ul>
+            <li><strong>Ajouter un tool</strong> = créer une classe, sans toucher au contrôleur ni au registre (principe ouvert/fermé)</li>
+            <li>Chaque tool est <strong>testable unitairement</strong> avec un dépôt simulé</li>
+            <li>Le contrôleur ne contient plus que le protocole : il pourrait servir à n'importe quelle application</li>
+        </ul>
+        <p><mark>Des classes découvertes automatiquement, un registre, un point d'entrée générique : c'est exactement ce que fait le <abbr title="Software Development Kit">SDK</abbr> avec ses attributs <code>#[McpTool]</code>.</mark></p>
+    </section>
+
+    <section>
+        <h3>Pour aller plus loin : un listener</h3>
+        <p>La validation de l'en-tête <code>Origin</code> peut quitter le contrôleur pour un listener sur <code>kernel.request</code>, qui répond <code>403</code> avant même le routage :</p>
+        <pre style="font-size: 0.45em;" data-start="10" class="line-numbers"><code class="language-php">#[AsEventListener(event: KernelEvents::REQUEST)]
+final class McpOriginListener
+{
+    private const ALLOWED_HOSTS = ['localhost', '127.0.0.1'];
+
+    public function __invoke(RequestEvent $event): void
+    {
+        $request = $event-&gt;getRequest();
+        $origin = $request-&gt;headers-&gt;get('Origin');
+
+        if ($request-&gt;getPathInfo() !== '/mcp' || $origin === null) {
+            return;
+        }
+
+        if (!in_array(parse_url($origin, PHP_URL_HOST), self::ALLOWED_HOSTS, true)) {
+            $event-&gt;setResponse(new Response(status: Response::HTTP_FORBIDDEN));
+        }
+    }
+}</code></pre>
+        <footer>
+            <a href="https://symfony.com/doc/current/event_dispatcher.html" target="_blank" class="info">Events and Event Listeners</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Exercice</h3>
+        <p>Réorganisez le serveur <code>tickets-raw</code>.</p>
+        <div class="instructions">
+            <ol>
+                <li>Créez <code>McpToolInterface</code>, <code>McpToolRegistry</code> et <code>ListTicketsTool</code>, puis simplifiez <code>McpController</code>.</li>
+                <li>Vérifiez le tag avec <code>debug:container --tag=app.mcp_tool</code> et rejouez vos tests <code>curl</code>.</li>
+                <li>Ajoutez <code>GetTicketTool</code> et appelez-le depuis l'Inspector avec un identifiant existant, puis inexistant.</li>
+                <li>Ajoutez un tool <code>create_ticket</code> (<code>title</code> et <code>description</code> obligatoires) : injectez <code>EntityManagerInterface</code> pour enregistrer le ticket.</li>
+                <li>Bonus : créez <code>McpOriginListener</code> et testez avec <code>-H 'Origin: https://evil.example'</code>.</li>
+            </ol>
+        </div>
+    </section>
+
+</section>

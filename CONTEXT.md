@@ -43,7 +43,7 @@ _Avoid_ : requête serveur, callback
 ## Fil rouge
 
 **Fil rouge** :
-Application de gestion de tickets de support, dont le code de départ est donné dans les slides, que les étudiants exposent progressivement sous forme de serveur MCP au fil des TP.
+Application Symfony de gestion de tickets de support (Doctrine + SQLite), dont le code de départ est donné dans les slides, que les étudiants exposent sous forme de serveur MCP : d'abord avec un contrôleur écrit à la main (projet `tickets-raw`), puis avec `symfony/mcp-bundle` (projet `tickets`).
 _Avoid_ : projet, TP final, application exemple
 
 **Ticket** :

@@ -42,26 +42,27 @@
     </section>
 
     <section>
-        <h3>Déclarer un tool avec le SDK</h3>
-        <div class="tabs-container">
-            <ul class="tabs-buttons-container">
-                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
-            </ul>
-            <div class="tabs">
-                <div class="tab-php active">
-                    <pre style="font-size: 0.45em;" data-line="12-14,19" class="line-numbers"><code class="language-php">&lt;?php
+        <h3><code>TicketTools</code> : dépendances et liste</h3>
+        <pre style="font-size: 0.42em;" data-line="16-20,26" class="line-numbers"><code class="language-php">&lt;?php
 
-namespace App;
+namespace App\Mcp;
 
+use App\Entity\Ticket;
+use App\Repository\TicketRepository;
+use Doctrine\ORM\EntityManagerInterface;
 use Mcp\Capability\Attribute\McpTool;
 use Mcp\Capability\Attribute\Schema;
 use Mcp\Exception\ToolCallException;
 use Mcp\Schema\ToolAnnotations;
+use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
 
-class TicketTools
+final class TicketTools
 {
-    public function __construct(private TicketRepository $tickets)
-    {
+    public function __construct(
+        private readonly TicketRepository $tickets,
+        private readonly EntityManagerInterface $em,
+        private readonly NormalizerInterface $normalizer,
+    ) {
     }
 
     /**
@@ -70,31 +71,21 @@ class TicketTools
     #[McpTool(name: 'list_tickets', annotations: new ToolAnnotations(readOnlyHint: true))]
     public function list(#[Schema(enum: ['open', 'closed'])] ?string $status = null): array
     {
-        return ['tickets' =&gt; $this-&gt;tickets-&gt;findAll($status)];
+        $tickets = $status ? $this-&gt;tickets-&gt;findBy(['status' =&gt; $status]) : $this-&gt;tickets-&gt;findAll();
+
+        return ['tickets' =&gt; $this-&gt;normalizer-&gt;normalize($tickets)];
     }</code></pre>
-                </div>
-            </div>
-        </div>
-        <p>Le conteneur du <abbr title="Software Development Kit">SDK</abbr> instancie <code>TicketRepository</code> et l'injecte dans le constructeur.</p>
+        <p>Le conteneur de Symfony injecte le dépôt, l'<code>EntityManagerInterface</code>, qui servira aux tools d'écriture, et le <code>NormalizerInterface</code>, qui transforme les tickets en tableaux.</p>
     </section>
 
     <section>
         <h3>Enrichir le schéma : <code>#[Schema]</code></h3>
         <p>L'attribut <code>#[Schema]</code> ajoute des contraintes, vérifiées par le SDK à chaque appel :</p>
-        <div class="tabs-container">
-            <ul class="tabs-buttons-container">
-                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
-            </ul>
-            <div class="tabs">
-                <div class="tab-php active">
-                    <pre><code class="language-php">public function create(
+        <pre><code class="language-php">public function create(
     #[Schema(minLength: 5, description: 'Résumé du problème')] string $title,
     string $description,
     #[Schema(format: 'email')] ?string $reporterEmail = null,
 ): array</code></pre>
-                </div>
-            </div>
-        </div>
         <table>
             <thead>
                 <tr><th>Contrainte</th><th>Exemples</th></tr>
@@ -160,14 +151,8 @@ class TicketTools
 
     <section>
         <h3>Déclarer le résultat : <code>outputSchema</code></h3>
-        <div class="tabs-container">
-            <ul class="tabs-buttons-container">
-                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
-            </ul>
-            <div class="tabs">
-                <div class="tab-php active">
-                    <pre style="font-size: 0.45em;" data-line="31-39" data-start="25" class="line-numbers"><code class="language-php">    /**
-     * Récupère le détail d'un ticket.
+        <pre style="font-size: 0.45em;" data-line="40-48" data-start="34" class="line-numbers"><code class="language-php">    /**
+     * Récupère le détail d'un ticket à partir de son identifiant.
      */
     #[McpTool(
         name: 'get_ticket',
@@ -184,12 +169,9 @@ class TicketTools
     )]
     public function get(int $id): array
     {
-        return $this-&gt;tickets-&gt;find($id) ?? throw new ToolCallException("Le ticket #$id n'existe pas.");
+        return $this-&gt;normalizer-&gt;normalize($this-&gt;find($id));
     }</code></pre>
-                </div>
-            </div>
-        </div>
-        <p>Le serveur <strong>doit</strong> renvoyer un <code>structuredContent</code> conforme au schéma déclaré.</p>
+        <p>Le serveur <strong>doit</strong> renvoyer un <code>structuredContent</code> conforme au schéma déclaré. La méthode privée <code>find()</code> est présentée plus loin.</p>
         <footer>
             <a href="https://modelcontextprotocol.io/specification/2026-07-28/server/tools#output-schema" target="_blank" class="info">Output schema</a>
         </footer>
@@ -243,19 +225,20 @@ class TicketTools
 
     <section>
         <h3><code>TicketTools</code> : création et assignation</h3>
-        <div class="tabs-container">
-            <ul class="tabs-buttons-container">
-                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
-            </ul>
-            <div class="tabs">
-                <div class="tab-php active">
-                    <pre style="font-size: 0.5em;" data-start="46" class="line-numbers"><code class="language-php">    /**
+        <pre style="font-size: 0.45em;" data-line="61-66,77-78" data-start="55" class="line-numbers"><code class="language-php">    /**
      * Crée un ticket de support.
      */
     #[McpTool(name: 'create_ticket')]
     public function create(#[Schema(minLength: 5)] string $title, string $description): array
     {
-        return $this-&gt;tickets-&gt;create($title, $description);
+        $ticket = new Ticket()
+            -&gt;setTitle($title)
+            -&gt;setDescription($description)
+            -&gt;setStatus('open');
+        $this-&gt;em-&gt;persist($ticket);
+        $this-&gt;em-&gt;flush();
+
+        return $this-&gt;normalizer-&gt;normalize($ticket);
     }
 
     /**
@@ -264,55 +247,44 @@ class TicketTools
     #[McpTool(name: 'assign_ticket', annotations: new ToolAnnotations(idempotentHint: true))]
     public function assign(int $id, string $assignee): string
     {
-        $this-&gt;get($id);
-        $this-&gt;tickets-&gt;assign($id, $assignee);
+        $this-&gt;find($id)-&gt;setAssignee($assignee);
+        $this-&gt;em-&gt;flush();
+
         return "Ticket #$id assigné à $assignee.";
     }</code></pre>
-                </div>
-            </div>
-        </div>
-        <p><code>assign()</code> appelle <code>get()</code> pour signaler un ticket inexistant par une <code>ToolCallException</code>.</p>
+        <p>Un ticket chargé par Doctrine est suivi : modifier sa propriété puis appeler <code>flush()</code> suffit à l'enregistrer.</p>
     </section>
 
     <section>
         <h3><code>TicketTools</code> : fermeture</h3>
-        <div class="tabs-container">
-            <ul class="tabs-buttons-container">
-                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
-            </ul>
-            <div class="tabs">
-                <div class="tab-php active">
-                    <pre data-line="69" data-start="66" class="line-numbers"><code class="language-php">    /**
+        <pre style="font-size: 0.5em;" data-line="86,95-98" data-start="83" class="line-numbers"><code class="language-php">    /**
      * Ferme un ticket résolu.
      */
     #[McpTool(name: 'close_ticket', annotations: new ToolAnnotations(destructiveHint: true))]
     public function close(int $id): string
     {
-        $this-&gt;get($id);
-        $this-&gt;tickets-&gt;close($id);
+        $this-&gt;find($id)-&gt;setStatus('closed');
+        $this-&gt;em-&gt;flush();
+
         return "Ticket #$id fermé.";
     }
+
+    private function find(int $id): Ticket
+    {
+        return $this-&gt;tickets-&gt;find($id) ?? throw new ToolCallException("Le ticket #$id n'existe pas.");
+    }
 }</code></pre>
-                </div>
-            </div>
-        </div>
-        <p>Fermer un ticket est une action <strong>destructrice</strong> : nous ajouterons une confirmation de l'utilisateur au chapitre <abbr title="Multi Round-Trip Request">MRTR</abbr> et elicitation.</p>
+        <ul>
+            <li><code>find()</code> n'a pas d'attribut : ce n'est pas un tool, mais elle signale un ticket inexistant par une <code>ToolCallException</code></li>
+            <li>Fermer un ticket est une action <strong>destructrice</strong> : nous ajouterons une confirmation de l'utilisateur au chapitre <abbr title="Multi Round-Trip Request">MRTR</abbr> et elicitation</li>
+        </ul>
     </section>
 
     <section>
         <h3>Tester les tools</h3>
         <p>Dans l'Inspector, testez les cas nominaux <strong>et</strong> les cas d'erreur :</p>
-        <div class="tabs-container">
-            <ul class="tabs-buttons-container">
-                <li><button class="tab-button active" data-target=".tab-php" data-target-everywhere="1">PHP</button></li>
-            </ul>
-            <div class="tabs">
-                <div class="tab-php active">
-                    <pre><code class="language-bash">npx @modelcontextprotocol/inspector --cli php server.php --method tools/call \
-  --tool-name get_ticket --tool-arg id=2</code></pre>
-                </div>
-            </div>
-        </div>
+        <pre style="font-size: 0.55em;"><code class="language-bash">npx @modelcontextprotocol/inspector --cli --config inspector.json --server tickets \
+  --method tools/call --tool-name get_ticket --tool-arg id=2</code></pre>
         <ul>
             <li><code>get_ticket</code> avec un identifiant inexistant : <code>isError: true</code></li>
             <li><code>create_ticket</code> avec un titre de 3 caractères : arguments rejetés par le schéma</li>
@@ -324,16 +296,8 @@ class TicketTools
     </section>
 
     <section>
-        <h3>Brancher le serveur dans VS Code</h3>
-        <pre><code class="language-json">{
-    "servers": {
-        "tickets": {
-            "type": "stdio",
-            "command": "php",
-            "args": ["${workspaceFolder}/server.php"]
-        }
-    }
-}</code></pre>
+        <h3>Utiliser les tools depuis Copilot</h3>
+        <p>Le serveur déclaré dans <code>.vscode/mcp.json</code> au chapitre précédent expose désormais cinq tools. Redémarrez-le avec <strong>MCP: List Servers</strong> pour recharger leur liste.</p>
         <p>Dans le chat de Copilot, en mode agent :</p>
         <ul>
             <li>« Quels tickets sont ouverts ? »</li>
@@ -370,9 +334,10 @@ class TicketTools
         <p>Exposez le fil rouge sous forme de tools.</p>
         <div class="instructions">
             <ol>
-                <li>Créez <code>src/TicketTools.php</code> avec les tools <code>list_tickets</code>, <code>get_ticket</code>, <code>create_ticket</code>, <code>assign_ticket</code> et <code>close_ticket</code>.</li>
+                <li>Complétez <code>src/Mcp/TicketTools.php</code> avec les tools <code>list_tickets</code>, <code>get_ticket</code>, <code>create_ticket</code>, <code>assign_ticket</code> et <code>close_ticket</code>.</li>
                 <li>Testez chaque tool dans l'Inspector, y compris les cas d'erreur.</li>
-                <li>Déclarez le serveur dans <code>.vscode/mcp.json</code> et utilisez-le depuis Copilot.</li>
+                <li>Vérifiez avec <code>dbal:run-sql</code> que les tools d'écriture modifient bien la base.</li>
+                <li>Utilisez le serveur depuis Copilot.</li>
                 <li>Comparez le comportement de Copilot sur <code>list_tickets</code> et sur <code>close_ticket</code>.</li>
                 <li>Bonus : ajoutez un tool <code>search_tickets</code> qui cherche un texte dans le titre et la description.</li>
             </ol>

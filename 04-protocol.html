@@ -5,6 +5,19 @@
     </section>
 
     <section>
+        <h3>Notre contrôleur est trop naïf</h3>
+        <p>Le serveur du chapitre précédent fonctionne avec <code>curl</code>, mais il ignore presque tout du protocole :</p>
+        <ul>
+            <li>il ne vérifie pas la <strong>version</strong> du protocole demandée par le client</li>
+            <li>une méthode inconnue provoque une erreur <code>500</code></li>
+            <li><code>tools/call</code> exécute <code>list_tickets</code> quel que soit le nom demandé</li>
+            <li>il ignore les <strong>en-têtes HTTP</strong> imposés par le transport</li>
+            <li>il n'indique pas son <strong>identité</strong> (<code>serverInfo</code>)</li>
+        </ul>
+        <p><mark>Dans ce chapitre, chaque règle du protocole devient quelques lignes de code dans <code>McpController</code>.</mark></p>
+    </section>
+
+    <section>
         <h3>JSON-RPC 2.0</h3>
         <p>Tous les messages <abbr title="Model Context Protocol">MCP</abbr> suivent la spécification <strong><abbr title="JSON Remote Procedure Call">JSON-RPC</abbr> 2.0</strong> : un format d'appel de procédure à distance encodé en JSON.</p>
         <table>
@@ -58,8 +71,23 @@
             <li>N'importe quelle instance du serveur peut traiter n'importe quelle requête</li>
             <li>Un état qui dure entre plusieurs requêtes passe par un <strong>identifiant explicite</strong>, par exemple un argument de tool</li>
         </ul>
+        <p>C'est le modèle d'exécution de PHP : chaque requête HTTP est traitée indépendamment. Un contrôleur Symfony suffit.</p>
         <footer>
             <a href="https://modelcontextprotocol.io/specification/2026-07-28/basic#statelessness" target="_blank" class="info">Statelessness</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Pourquoi MCP n'a pas toujours été sans état ?</h3>
+        <ul>
+            <li>MCP a été conçu pour un usage <strong>local</strong>, en s'inspirant du <strong>Language Server Protocol</strong> (LSP) qui relie les éditeurs aux analyseurs de code</li>
+            <li>Le client lançait le serveur comme sous-processus et dialoguait avec lui en stdio pendant toute sa durée de vie : une poignée de main initiale était naturelle</li>
+            <li>Le serveur devait aussi pouvoir <strong>solliciter le client</strong> à tout moment (sampling, elicitation, roots) : il fallait une connexion vivante et une session</li>
+        </ul>
+        <p>Une fois MCP déployé comme service web distant, les sessions sont devenues un frein : <em>sticky sessions</em> derrière un répartiteur de charge, serverless difficile, montée en charge compliquée.</p>
+        <p>La version <code>2026-07-28</code> se rapproche donc du modèle HTTP classique.</p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/changelog" target="_blank" class="info">Key changes</a>
         </footer>
     </section>
 
@@ -71,8 +99,8 @@
   "id": 1,
   "method": "tools/call",
   "params": {
-    "name": "get_ticket",
-    "arguments": { "id": 2 },
+    "name": "list_tickets",
+    "arguments": { "status": "open" },
     "_meta": {
       "io.modelcontextprotocol/protocolVersion": "2026-07-28",
       "io.modelcontextprotocol/clientCapabilities": { "elicitation": {} },
@@ -87,28 +115,79 @@
     </section>
 
     <section>
+        <h3>Lire la requête</h3>
+        <p>On extrait une fois pour toutes ce dont les vérifications auront besoin :</p>
+        <pre style="font-size: 0.45em;" data-line="14-15,25-30" data-start="12" class="line-numbers"><code class="language-php">final class McpController
+{
+    private const VERSION = '2026-07-28';
+    private const SERVER_INFO = ['name' =&gt; 'tickets', 'version' =&gt; '1.0.0'];
+
+    public function __construct(
+        private readonly TicketRepository $tickets,
+        private readonly SerializerInterface $serializer,
+    ) {
+    }
+
+    public function __invoke(Request $request): JsonResponse
+    {
+        $message = json_decode($request-&gt;getContent(), true) ?? [];
+        $id = $message['id'] ?? null;
+        $method = $message['method'] ?? null;
+        $params = $message['params'] ?? [];
+        $version = $params['_meta']['io.modelcontextprotocol/protocolVersion'] ?? null;
+        $name = $method === 'tools/call' ? ($params['name'] ?? null) : null;</code></pre>
+        <p><code>?? null</code> évite les erreurs sur une requête mal formée : les vérifications suivantes la rejetteront.</p>
+    </section>
+
+    <section>
+        <h3>Vérifier la version</h3>
+        <p>Sans poignée de main, la version est vérifiée <strong>à chaque requête</strong>. Une version non supportée renvoie <code>400</code> et l'erreur <code>-32022</code>, avec la liste des versions acceptées :</p>
+        <pre data-start="38" class="line-numbers"><code class="language-php">        if ($version !== self::VERSION) {
+            return $this-&gt;error($id, -32022, 'Unsupported protocol version', 400, [
+                'supported' =&gt; [self::VERSION],
+                'requested' =&gt; $version,
+            ]);
+        }</code></pre>
+        <p>Le client choisit alors une version de la liste <code>supported</code> et renvoie sa requête.</p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/basic/versioning" target="_blank" class="info">Versioning</a>
+        </footer>
+    </section>
+
+    <section>
         <h3>Le résultat et <code>resultType</code></h3>
-        <pre style="font-size: 0.55em;"><code class="language-json">{
+        <pre style="font-size: 0.5em;"><code class="language-json">{
   "jsonrpc": "2.0",
   "id": 1,
   "result": {
     "resultType": "complete",
-    "content": [
-      { "type": "text", "text": "{\"id\": 2, \"title\": \"Facture en double\", \"status\": \"open\"}" }
-    ],
-    "isError": false,
+    "content": [{ "type": "text", "text": "[{\"id\": 1, \"title\": \"Connexion impossible\", …}]" }],
     "_meta": {
-      "io.modelcontextprotocol/serverInfo": { "name": "Tickets", "version": "1.0.0" }
+      "io.modelcontextprotocol/serverInfo": { "name": "tickets", "version": "1.0.0" }
     }
   }
 }</code></pre>
         <ul>
             <li><code>resultType</code> est obligatoire : <code>"complete"</code> pour un résultat final, <code>"input_required"</code> quand le serveur attend une information (voir le chapitre <abbr title="Multi Round-Trip Request">MRTR</abbr>)</li>
             <li>Un client traite un <code>resultType</code> absent comme <code>"complete"</code> (serveurs plus anciens)</li>
-            <li>Le serveur s'identifie dans <code>_meta</code> avec <code>serverInfo</code></li>
+            <li>Le serveur s'identifie dans le <code>_meta</code> de <strong>chaque</strong> résultat avec <code>serverInfo</code></li>
         </ul>
         <footer>
             <a href="https://modelcontextprotocol.io/specification/2026-07-28/basic#resulttype" target="_blank" class="info">ResultType</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Renvoyer le résultat</h3>
+        <pre data-line="68" data-start="65" class="line-numbers"><code class="language-php">        return new JsonResponse(['jsonrpc' =&gt; '2.0', 'id' =&gt; $id, 'result' =&gt; [
+            'resultType' =&gt; 'complete',
+            ...$result,
+            '_meta' =&gt; ['io.modelcontextprotocol/serverInfo' =&gt; self::SERVER_INFO],
+        ]]);
+    }</code></pre>
+        <p>L'opérateur <code>...</code> déplie le tableau associatif <code>$result</code> préparé par le <code>match</code>.</p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/basic#_meta" target="_blank" class="info">Per-response protocol fields</a>
         </footer>
     </section>
 
@@ -151,6 +230,52 @@
     </section>
 
     <section>
+        <h3>Renvoyer une erreur</h3>
+        <p>Une méthode privée construit toutes les réponses en erreur :</p>
+        <pre style="font-size: 0.45em;" data-start="72" class="line-numbers"><code class="language-php">    private function error(mixed $id, int $code, string $message, int $status = 200, array $data = []): JsonResponse
+    {
+        $error = ['code' =&gt; $code, 'message' =&gt; $message, ...($data ? ['data' =&gt; $data] : [])];
+
+        return new JsonResponse(['jsonrpc' =&gt; '2.0', 'id' =&gt; $id, 'error' =&gt; $error], $status);
+    }</code></pre>
+        <ul>
+            <li>Le code <abbr title="JSON Remote Procedure Call">JSON-RPC</abbr> explique l'erreur au client</li>
+            <li>Le code <strong>HTTP</strong> renseigne aussi les intermédiaires (proxy, répartiteur de charge…) qui ne lisent pas le corps</li>
+        </ul>
+    </section>
+
+    <section>
+        <h3>Méthode ou tool inconnu</h3>
+        <pre style="font-size: 0.4em;" data-line="45-47,58,61-63" data-start="45" class="line-numbers"><code class="language-php">        if ($method === 'tools/call' &amp;&amp; $name !== 'list_tickets') {
+            return $this-&gt;error($id, -32602, "Unknown tool: $name");
+        }
+
+        $result = match ($method) {
+            'server/discover' =&gt; [
+                'supportedVersions' =&gt; [self::VERSION],
+                'capabilities' =&gt; ['tools' =&gt; new \stdClass()],
+                'ttlMs' =&gt; 3_600_000,
+                'cacheScope' =&gt; 'public',
+            ],
+            'tools/list' =&gt; ['tools' =&gt; [$this-&gt;listTicketsTool()], 'ttlMs' =&gt; 300_000, 'cacheScope' =&gt; 'public'],
+            'tools/call' =&gt; $this-&gt;listTickets($params['arguments'] ?? []),
+            default =&gt; null,
+        };
+
+        if ($result === null) {
+            return $this-&gt;error($id, -32601, 'Method not found', 404);
+        }</code></pre>
+        <ul>
+            <li>Méthode non implémentée : <code>404 Not Found</code> et <code>-32601</code></li>
+            <li>Tool inconnu : erreur de protocole <code>-32602</code></li>
+        </ul>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http#protocol-version-header" target="_blank" class="info">Method not found</a>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/server/tools#error-handling" target="_blank" class="info">Tools : error handling</a>
+        </footer>
+    </section>
+
+    <section>
         <h3>Découvrir un serveur : <code>server/discover</code></h3>
         <p>La requête ne contient que les métadonnées <code>_meta</code>. Réponse :</p>
         <pre><code class="language-json">{
@@ -159,18 +284,41 @@
   "result": {
     "resultType": "complete",
     "supportedVersions": ["2026-07-28"],
-    "capabilities": { "tools": {}, "resources": {}, "prompts": {} },
+    "capabilities": { "tools": {} },
     "instructions": "Serveur de gestion des tickets de support.",
     "_meta": {
-      "io.modelcontextprotocol/serverInfo": { "name": "Tickets", "version": "1.0.0" }
+      "io.modelcontextprotocol/serverInfo": { "name": "tickets", "version": "1.0.0" }
     },
     "ttlMs": 3600000,
     "cacheScope": "public"
   }
 }</code></pre>
-        <p>Obligatoire pour les serveurs, <strong>facultatif</strong> pour les clients.</p>
+        <p>Obligatoire pour les serveurs, <strong>facultatif</strong> pour les clients. <code>instructions</code> (facultatif) guide le modèle dans l'usage du serveur.</p>
         <footer>
             <a href="https://modelcontextprotocol.io/specification/2026-07-28/server/discover" target="_blank" class="info">Discovery</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Mettre en cache</h3>
+        <p>Sans session, c'est le client qui garde les réponses en cache. Le serveur <strong>doit</strong> lui indiquer pour combien de temps : nous l'avons déjà fait au chapitre précédent, car l'Inspector rejette une réponse sans ces champs.</p>
+        <ul>
+            <li><code>ttlMs</code> : durée de validité en millisecondes (<code>0</code> : toujours périmée)</li>
+            <li><code>cacheScope</code> : <code>public</code> (identique pour tous) ou <code>private</code> (propre à l'utilisateur)</li>
+        </ul>
+        <table>
+            <thead>
+                <tr><th>Méthodes concernées</th><th>Dans notre contrôleur</th></tr>
+            </thead>
+            <tbody>
+                <tr><td><code>server/discover</code></td><td>1 heure, <code>public</code></td></tr>
+                <tr><td><code>tools/list</code>, <code>prompts/list</code>, <code>resources/list</code>…</td><td>5 minutes, <code>public</code></td></tr>
+                <tr><td><code>resources/read</code></td><td>—</td></tr>
+            </tbody>
+        </table>
+        <p><code>tools/call</code> n'est jamais mis en cache.</p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/server/utilities/caching" target="_blank" class="info">Caching</a>
         </footer>
     </section>
 
@@ -184,7 +332,7 @@
         </ul>
         <pre style="font-size: 0.5em;"><code class="language-json">{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{"_meta":{…}}}
 {"jsonrpc":"2.0","id":1,"result":{"resultType":"complete","tools":[…],"ttlMs":0,"cacheScope":"private"}}</code></pre>
-        <p class="console-error">Un simple <code>echo</code> ou <code>var_dump()</code> dans un serveur stdio corrompt le flux de messages.</p>
+        <p class="console-error">Un simple <code>echo</code> ou <code>dump()</code> dans un serveur stdio corrompt le flux de messages.</p>
         <footer>
             <a href="https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/stdio" target="_blank" class="info">stdio</a>
         </footer>
@@ -192,6 +340,7 @@
 
     <section>
         <h3>Transport Streamable HTTP</h3>
+        <p>C'est le transport de notre contrôleur :</p>
         <ul>
             <li>Le serveur expose <strong>une seule URL</strong> (l'endpoint MCP), qui accepte <code>POST</code></li>
             <li>Chaque message du client est une requête <code>POST</code> distincte</li>
@@ -213,9 +362,9 @@ Content-Type: application/json
 Accept: application/json, text/event-stream
 MCP-Protocol-Version: 2026-07-28
 Mcp-Method: tools/call
-Mcp-Name: get_ticket
+Mcp-Name: list_tickets
 
-{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "get_ticket", …}}</code></pre>
+{"jsonrpc": "2.0", "id": 1, "method": "tools/call", "params": {"name": "list_tickets", …}}</code></pre>
         <p><code>MCP-Protocol-Version</code> et <code>Mcp-Method</code> accompagnent toutes les requêtes ; <code>Mcp-Name</code> accompagne <code>tools/call</code>, <code>resources/read</code> et <code>prompts/get</code>.</p>
         <footer>
             <a href="https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http#request-metadata" target="_blank" class="info">Request metadata</a>
@@ -223,15 +372,73 @@ Mcp-Name: get_ticket
     </section>
 
     <section>
+        <h3>Vérifier les en-têtes</h3>
+        <p>Un en-tête absent ou en désaccord avec le corps renvoie <code>400</code> et l'erreur <code>-32020</code> :</p>
+        <pre style="font-size: 0.5em;" data-start="32" class="line-numbers"><code class="language-php">        if ($request-&gt;headers-&gt;get('MCP-Protocol-Version') !== $version
+            || $request-&gt;headers-&gt;get('Mcp-Method') !== $method
+            || $request-&gt;headers-&gt;get('Mcp-Name') !== $name) {
+            return $this-&gt;error($id, -32020, 'Header mismatch', 400);
+        }</code></pre>
+        <p><mark>Un répartiteur de charge qui route sur l'en-tête et un serveur qui exécute le corps doivent parler de la même requête.</mark></p>
+        <p>Simplification : la spécification prévoit aussi un encodage Base64 de <code>Mcp-Name</code> pour les noms non ASCII.</p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http#server-validation" target="_blank" class="info">Server validation</a>
+        </footer>
+    </section>
+
+    <section>
         <h3>Streamable HTTP : sécurité</h3>
         <ul>
             <li>Le serveur <strong>doit</strong> valider l'en-tête <code>Origin</code> et répondre <code>403</code> s'il est invalide, pour bloquer les attaques par <strong>DNS rebinding</strong></li>
-            <li>En local, le serveur écoute uniquement sur <code>127.0.0.1</code></li>
+            <li>En local, le serveur écoute uniquement sur <code>localhost</code></li>
             <li>Un serveur distant met en place une <strong>authentification</strong> (voir le chapitre Sécurité)</li>
         </ul>
         <p><mark>Sans ces protections, un site web malveillant peut piloter un serveur MCP local depuis le navigateur de l'utilisateur.</mark></p>
+        <p>Notre contrôleur ne valide pas encore <code>Origin</code> : ce sera le bonus du chapitre suivant.</p>
         <footer>
-            <a href="https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http" target="_blank" class="warning">Security & Endpoint</a>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/basic/transports/streamable-http" target="_blank" class="warning">Security &amp; Endpoint</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Tester avec <code>curl</code></h3>
+        <p>Une requête conforme porte désormais les en-têtes et les métadonnées :</p>
+        <pre style="font-size: 0.5em;"><code class="language-bash">curl -X POST http://localhost:8000/mcp \
+  -H 'Content-Type: application/json' \
+  -H 'Accept: application/json, text/event-stream' \
+  -H 'MCP-Protocol-Version: 2026-07-28' \
+  -H 'Mcp-Method: tools/call' -H 'Mcp-Name: list_tickets' \
+  -d '{"jsonrpc": "2.0", "id": 3, "method": "tools/call",
+       "params": {"name": "list_tickets", "arguments": {"status": "closed"},
+                  "_meta": {"io.modelcontextprotocol/protocolVersion": "2026-07-28",
+                            "io.modelcontextprotocol/clientCapabilities": {}}}}'</code></pre>
+        <table>
+            <thead>
+                <tr><th>Essai</th><th>Réponse attendue</th></tr>
+            </thead>
+            <tbody>
+                <tr><td>En-tête <code>Mcp-Name: list_ticket</code></td><td><code>400</code>, <code>-32020</code></td></tr>
+                <tr><td>Version <code>2025-11-25</code> (corps et en-tête)</td><td><code>400</code>, <code>-32022</code></td></tr>
+                <tr><td>Méthode <code>prompts/list</code></td><td><code>404</code>, <code>-32601</code></td></tr>
+                <tr><td>Tool <code>list_ticket</code> (corps et en-tête)</td><td><code>200</code>, <code>-32602</code></td></tr>
+            </tbody>
+        </table>
+    </section>
+
+    <section>
+        <h3>Un vrai client : l'Inspector</h3>
+        <p>Le <strong>MCP Inspector</strong> se connecte à notre serveur en ère <code>modern</code> grâce à un fichier de configuration :</p>
+        <pre><code class="language-json">{
+  "mcpServers": {
+    "tickets": { "type": "http", "url": "http://localhost:8000/mcp", "protocolEra": "modern" }
+  }
+}</code></pre>
+        <pre style="font-size: 0.5em;"><code class="language-bash">npx @modelcontextprotocol/inspector --cli --config inspector.json --server tickets \
+  --method tools/call --tool-name list_tickets --tool-arg status=open</code></pre>
+        <p>Sans <code>--cli</code>, l'Inspector ouvre son interface web et affiche l'historique des messages.</p>
+        <p>Par défaut, l'Inspector utilise l'ère <code>legacy</code> et commencerait par <code>initialize</code>, que notre serveur ne connaît pas.</p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/docs/2026-07-28/tools/inspector/cli" target="_blank" class="info">Inspector CLI</a>
         </footer>
     </section>
 
@@ -241,10 +448,10 @@ Mcp-Name: get_ticket
         <pre style="font-size: 0.55em;"><code class="language-none">→ initialize                { protocolVersion, capabilities, clientInfo }
 ← résultat                  { protocolVersion, capabilities, serverInfo }  + Mcp-Session-Id
 → notifications/initialized
-→ tools/call   (id 1)       { name: "get_ticket", arguments: { id: 2 } }   + Mcp-Session-Id
+→ tools/call   (id 1)       { name: "list_tickets", arguments: { } }       + Mcp-Session-Id
 ← résultat     (id 1)       { content: [ … ] }</code></pre>
         <p>Depuis <code>2026-07-28</code>, chaque requête est <strong>autonome</strong> :</p>
-        <pre style="font-size: 0.55em;"><code class="language-none">→ tools/call   (id 1)       { name: "get_ticket", arguments: { id: 2 },
+        <pre style="font-size: 0.55em;"><code class="language-none">→ tools/call   (id 1)       { name: "list_tickets", arguments: { },
                               _meta: { protocolVersion, clientCapabilities } }
 ← résultat     (id 1)       { resultType: "complete", content: [ … ] }</code></pre>
         <p>Ce qu'expose un serveur ne change pas d'une ère à l'autre ; seul le cycle de vie des échanges diffère.</p>
@@ -280,7 +487,8 @@ Mcp-Name: get_ticket
             <li><strong>Dépréciés</strong> (encore fonctionnels, à ne plus utiliser) : <em>Roots</em>, <em>Sampling</em> et <em>Logging</em></li>
             <li><strong>Déplacé</strong> dans une extension officielle : <em>Tasks</em></li>
         </ul>
-        <p>En septembre 2026, beaucoup de hosts parlent encore l'ère <code>legacy</code>, <strong>VS Code compris</strong>. Les <abbr title="Software Development Kit">SDK</abbr> officiels servent les deux ères avec le même code : vous croiserez encore <code>initialize</code> dans les tutoriels et les journaux.</p>
+        <p>En septembre 2026, beaucoup de hosts parlent encore l'ère <code>legacy</code>, <strong>VS Code compris</strong> : notre contrôleur, qui ne parle que l'ère <code>modern</code>, ne peut pas encore y être branché.</p>
+        <p>Le <abbr title="Software Development Kit">SDK</abbr> officiel sert les deux ères avec le même code (chapitre « Le SDK »).</p>
         <footer>
             <a href="https://modelcontextprotocol.io/specification/2026-07-28/deprecated" target="_blank" class="warning">Deprecated features</a>
             <a href="https://github.com/microsoft/vscode/issues/329848" target="_blank" class="info">VS Code et 2026-07-28</a>
@@ -288,7 +496,7 @@ Mcp-Name: get_ticket
     </section>
 
     <section>
-        <h3>Exercice</h3>
+        <h3>Exercice - Lire des échanges</h3>
         <p>Voici des échanges capturés entre un client et un serveur (<code>→</code> client vers serveur, <code>←</code> serveur vers client) :</p>
         <pre style="font-size: 0.45em;"><code class="language-none">→ {"jsonrpc":"2.0","id":1,"method":"server/discover","params":{"_meta":{
      "io.modelcontextprotocol/protocolVersion":"2026-07-28",
@@ -311,7 +519,7 @@ Mcp-Name: get_ticket
     </section>
 
     <section>
-        <h3>Exercice</h3>
+        <h3>Exercice - Lire des échanges</h3>
         <div class="instructions">
             <ol>
                 <li>Quelle version du protocole le client utilise-t-il, et quelles capacités le serveur annonce-t-il ?</li>
@@ -319,6 +527,20 @@ Mcp-Name: get_ticket
                 <li>Pourquoi la requête 2 renvoie-t-elle un <code>result</code> et non une <code>error</code> ? Qui en tirera parti ?</li>
                 <li>Que signifie l'erreur de la requête 3 ? Quel code HTTP accompagne cette réponse en Streamable HTTP ?</li>
                 <li>Que doit faire le client après la réponse à la requête 4 ?</li>
+            </ol>
+        </div>
+    </section>
+
+    <section>
+        <h3>Exercice - Un serveur conforme</h3>
+        <p>Faites évoluer <code>McpController</code> pour qu'il respecte le protocole.</p>
+        <div class="instructions">
+            <ol>
+                <li>Ajoutez les constantes <code>VERSION</code> et <code>SERVER_INFO</code>, puis la méthode <code>error()</code>.</li>
+                <li>Vérifiez les en-têtes, la version, le nom du tool et la méthode demandée.</li>
+                <li>Ajoutez <code>serverInfo</code> dans le <code>_meta</code> <strong>à l'intérieur</strong> de <code>result</code> : l'Inspector rejette un <code>_meta</code> placé à côté.</li>
+                <li>Rejouez les quatre essais de la slide « Tester avec <code>curl</code> » et vérifiez codes HTTP et erreurs.</li>
+                <li>Appelez <code>list_tickets</code> depuis l'Inspector en ère <code>modern</code>, puis en ère <code>legacy</code> : expliquez la différence.</li>
             </ol>
         </div>
     </section>

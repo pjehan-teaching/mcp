@@ -1,0 +1,264 @@
+<section id="symfony-sdk">
+
+    <section>
+        <h2>Le SDK et <code>symfony/mcp-bundle</code></h2>
+    </section>
+
+    <section>
+        <h3>Le SDK PHP officiel</h3>
+        <ul>
+            <li>Paquet Composer <code>mcp/sdk</code>, développé par la <strong>PHP Foundation</strong> et le projet <strong>Symfony</strong></li>
+            <li><abbr title="Software Development Kit">SDK</abbr> officiel de niveau 3, en version <code>0.8</code> : <strong>expérimental</strong> jusqu'à la version 1.0</li>
+            <li>Ères <code>legacy</code> et <code>modern</code> servies par le même code</li>
+            <li>Déclaration des tools, resources et prompts par <strong>attributs PHP</strong></li>
+        </ul>
+        <p>Le bundle <code>symfony/mcp-bundle</code> (version <code>0.14</code>) l'intègre à Symfony : route, configuration, conteneur de services, commandes.</p>
+        <p class="console-error">Le SDK et le bundle sont expérimentaux : leur API peut encore changer d'une version à l'autre.</p>
+        <footer>
+            <a href="https://github.com/modelcontextprotocol/php-sdk" target="_blank" class="info">modelcontextprotocol/php-sdk</a>
+            <a href="https://symfony.com/doc/current/ai/bundles/mcp-bundle.html" target="_blank" class="info">MCP Bundle</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Un nouveau projet</h3>
+        <p>On repart d'un projet vide pour mesurer ce que le <abbr title="Software Development Kit">SDK</abbr> apporte :</p>
+        <pre style="font-size: 0.55em;"><code class="language-bash">symfony new tickets
+cd tickets
+composer require orm serializer symfony/mcp-bundle nyholm/psr7 # « n » à la recette Docker
+composer require --dev orm-fixtures maker</code></pre>
+        <ul>
+            <li><code>nyholm/psr7</code> : le transport HTTP du SDK manipule des requêtes <strong>PSR-7</strong> ; sans implémentation, chaque requête échoue en <code>500</code></li>
+            <li>Copiez depuis <code>tickets-raw</code> : <code>.env.local</code>, l'entité <code>Ticket</code>, <code>TicketRepository</code> et <code>AppFixtures</code></li>
+            <li>Recréez la base : <code>make:migration</code>, <code>doctrine:migrations:migrate</code> puis <code>doctrine:fixtures:load</code></li>
+            <li>Les tools renvoient des tableaux : le <code>NormalizerInterface</code> du Serializer y transforme les tickets</li>
+        </ul>
+        <footer>
+            <a href="https://symfony.com/doc/current/ai/bundles/mcp-bundle.html#installation" target="_blank" class="info">Installation</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Configurer le serveur</h3>
+        <p>Le bundle n'a pas de recette Flex : les deux fichiers s'écrivent à la main.</p>
+        <div class="container">
+            <div class="col">
+                <pre><code class="language-yaml"># config/packages/mcp.yaml
+mcp:
+    servers:
+        default:
+            name: 'tickets'
+            version: '1.0.0'
+            http:
+                path: /mcp
+            registry: '*'</code></pre>
+            </div>
+            <div class="col">
+                <pre><code class="language-yaml"># config/routes.yaml
+controllers:
+    resource: routing.controllers
+
+mcp:
+    resource: .
+    type: mcp</code></pre>
+            </div>
+        </div>
+        <ul>
+            <li>Le bundle enregistre lui-même la route <code>/mcp</code> : <mark>plus de contrôleur à écrire</mark></li>
+            <li><code>registry: '*'</code> expose tous les tools, resources et prompts de l'application</li>
+        </ul>
+        <footer>
+            <a href="https://symfony.com/doc/current/ai/bundles/mcp-bundle.html#act-as-server" target="_blank" class="info">Act as Server</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Les tools : <code>TicketTools</code></h3>
+        <pre style="font-size: 0.42em;" data-line="19-22,30-33" class="line-numbers"><code class="language-php">&lt;?php
+
+namespace App\Mcp;
+
+use App\Repository\TicketRepository;
+use Mcp\Capability\Attribute\McpTool;
+use Mcp\Capability\Attribute\Schema;
+use Mcp\Exception\ToolCallException;
+use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
+
+final class TicketTools
+{
+    public function __construct(
+        private readonly TicketRepository $tickets,
+        private readonly NormalizerInterface $normalizer,
+    ) {
+    }
+
+    /**
+     * Liste les tickets de support, éventuellement filtrés par statut.
+     */
+    #[McpTool(name: 'list_tickets')]
+    public function list(#[Schema(enum: ['open', 'closed'])] ?string $status = null): array
+    {
+        $tickets = $status ? $this-&gt;tickets-&gt;findBy(['status' =&gt; $status]) : $this-&gt;tickets-&gt;findAll();
+
+        return ['tickets' =&gt; $this-&gt;normalizer-&gt;normalize($tickets)];
+    }
+
+    /**
+     * Récupère le détail d'un ticket à partir de son identifiant.
+     */
+    #[McpTool(name: 'get_ticket')]
+    public function get(int $id): array
+    {
+        $ticket = $this-&gt;tickets-&gt;find($id) ?? throw new ToolCallException("Le ticket #$id n'existe pas.");
+
+        return $this-&gt;normalizer-&gt;normalize($ticket);
+    }
+}</code></pre>
+        <p><mark>Ces 40 lignes remplacent le contrôleur, l'interface, le registre et les deux classes de tools.</mark></p>
+    </section>
+
+    <section>
+        <h3>Ce que fait le SDK</h3>
+        <ul>
+            <li><code>#[McpTool]</code> transforme la méthode en tool ; sans <code>name</code>, son nom est celui de la méthode</li>
+            <li>Le <strong>docblock</strong> devient la description du tool</li>
+            <li>Les <strong>types des paramètres</strong> deviennent le <code>inputSchema</code> : <code>int $id</code> donne un entier obligatoire ; <code>#[Schema]</code> ajoute des contraintes</li>
+            <li>Le SDK <strong>valide</strong> les arguments reçus avant d'appeler la méthode</li>
+            <li>Un tableau renvoyé devient un contenu texte JSON <strong>et</strong> un <code>structuredContent</code></li>
+            <li><code>ToolCallException</code> produit un résultat <code>isError: true</code> ; toute autre exception, une erreur <abbr title="JSON Remote Procedure Call">JSON-RPC</abbr> au message générique</li>
+        </ul>
+        <p>Toute classe de <code>src/</code> portant un attribut MCP est détectée à la <strong>compilation du conteneur</strong> : <code>TicketTools</code> reçoit le dépôt et le normalizer par autowiring.</p>
+        <footer>
+            <a href="https://github.com/modelcontextprotocol/php-sdk/blob/main/docs/servers/tools.md" target="_blank" class="info">SDK : Tools</a>
+            <a href="https://github.com/modelcontextprotocol/php-sdk/blob/main/docs/servers/schemas.md" target="_blank" class="info">SDK : Schema generation</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Vérifier la configuration</h3>
+        <pre><code class="language-bash">php bin/console debug:mcp</code></pre>
+        <pre style="font-size: 0.5em;"><code class="language-none">Tools (2)
+---------
+
+ -------------- ----------------------------- ------------------------------------------------------------------
+  Name           Handler                       Description
+ -------------- ----------------------------- ------------------------------------------------------------------
+  list_tickets   App\Mcp\TicketTools::list()   Liste les tickets de support, éventuellement filtrés par statut.
+  get_ticket     App\Mcp\TicketTools::get()    Récupère le détail d'un ticket à partir de son identifiant.
+ -------------- ----------------------------- ------------------------------------------------------------------</code></pre>
+        <ul>
+            <li><code>debug:mcp get_ticket</code> affiche le détail d'un tool, dont son <code>inputSchema</code></li>
+            <li><code>debug:router</code> montre la route <code>_mcp_endpoint_default</code> sur <code>/mcp</code></li>
+        </ul>
+        <footer>
+            <a href="https://symfony.com/doc/current/ai/bundles/mcp-bundle.html#debug-command" target="_blank" class="info">Debug command</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Tester dans les deux ères</h3>
+        <p>On lance le serveur comme avant, puis on déclare deux connexions dans <code>inspector.json</code> :</p>
+        <pre><code class="language-json">{
+  "mcpServers": {
+    "tickets": { "type": "http", "url": "http://localhost:8000/mcp", "protocolEra": "modern" },
+    "tickets-legacy": { "type": "http", "url": "http://localhost:8000/mcp" }
+  }
+}</code></pre>
+        <pre style="font-size: 0.5em;"><code class="language-bash">npx @modelcontextprotocol/inspector --cli --config inspector.json --server tickets \
+  --method tools/call --tool-name list_tickets --tool-arg status=closed
+npx @modelcontextprotocol/inspector --cli --config inspector.json --server tickets-legacy \
+  --method tools/list</code></pre>
+        <p><mark>La même URL répond aux deux ères</mark> : le transport examine chaque requête et choisit l'ère qui y répond.</p>
+        <footer>
+            <a href="https://symfony.com/doc/current/ai/bundles/mcp-bundle.html#the-modern-era" target="_blank" class="info">The Modern Era</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Le résultat produit par le SDK</h3>
+        <pre style="font-size: 0.45em;"><code class="language-json">{
+  "content": [{
+    "type": "text",
+    "text": "{\n    \"tickets\": [\n        {\n            \"id\": 3,\n            \"status\": \"closed\", …"
+  }],
+  "structuredContent": {
+    "tickets": [
+      { "id": 3, "status": "closed", "assignee": "bob", "title": "Export CSV vide", "description": "…" }
+    ]
+  },
+  "isError": false,
+  "_meta": {
+    "io.modelcontextprotocol/serverInfo": { "name": "tickets", "version": "1.0.0" }
+  }
+}</code></pre>
+        <ul>
+            <li><code>structuredContent</code> : les mêmes données, exploitables par le client sans parser de texte</li>
+            <li>Le schéma généré pour <code>?string $status = null</code> : <code>{"type": ["null", "string"], "default": null, "enum": ["open", "closed"]}</code></li>
+        </ul>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/server/tools#structured-content" target="_blank" class="info">Structured content</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Fait main ou SDK ?</h3>
+        <table style="font-size: 0.75em;">
+            <thead>
+                <tr><th></th><th>Projet <code>tickets-raw</code></th><th>Projet <code>tickets</code> (SDK)</th></tr>
+            </thead>
+            <tbody>
+                <tr><td>Point d'entrée</td><td><code>McpController</code></td><td>route fournie par le bundle</td></tr>
+                <tr><td>En-têtes, version, erreurs</td><td>vérifiés à la main</td><td>automatiques</td></tr>
+                <tr><td>Découverte des tools</td><td><code>#[AutoconfigureTag]</code> + registre</td><td><code>#[McpTool]</code>, lu à la compilation</td></tr>
+                <tr><td><code>inputSchema</code></td><td>écrit à la main</td><td>déduit des types PHP</td></tr>
+                <tr><td>Validation des arguments</td><td>aucune</td><td>automatique</td></tr>
+                <tr><td>Résultat</td><td><code>content</code> écrit à la main</td><td><code>content</code> + <code>structuredContent</code></td></tr>
+                <tr><td>Ère <code>legacy</code> (VS Code)</td><td>non</td><td>oui, même URL</td></tr>
+                <tr><td>Transport stdio, resources, prompts, elicitation</td><td>à écrire</td><td>fournis</td></tr>
+            </tbody>
+        </table>
+        <p><mark>Avec le SDK, on n'écrit plus que le code métier. Mais on sait maintenant ce qu'il fait pour nous.</mark></p>
+    </section>
+
+    <section>
+        <h3>Brancher le serveur dans VS Code</h3>
+        <div class="container">
+            <div class="col">
+                <pre><code class="language-json">{
+    "servers": {
+        "tickets": {
+            "type": "http",
+            "url": "http://localhost:8000/mcp"
+        }
+    }
+}</code></pre>
+            </div>
+            <div class="col">
+                <ul>
+                    <li>Fichier <code>.vscode/mcp.json</code> du projet</li>
+                    <li>VS Code se connecte en ère <code>legacy</code> : le serveur SDK lui répond, contrairement à <code>tickets-raw</code></li>
+                    <li><strong>MCP: List Servers</strong> &gt; <strong>Show Output</strong> affiche les échanges et les erreurs</li>
+                </ul>
+            </div>
+        </div>
+        <p>Dans le chat de Copilot, en mode agent : « Quels tickets sont ouverts ? »</p>
+        <footer>
+            <a href="https://code.visualstudio.com/docs/copilot/reference/mcp-configuration" target="_blank" class="info">MCP configuration reference</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Exercice</h3>
+        <p>Créez le serveur du fil rouge avec le SDK.</p>
+        <div class="instructions">
+            <ol>
+                <li>Créez le projet <code>tickets</code>, installez les paquets et copiez l'entité, le dépôt, les fixtures et <code>.env.local</code>.</li>
+                <li>Écrivez <code>mcp.yaml</code>, la route et <code>src/Mcp/TicketTools.php</code>, puis vérifiez avec <code>debug:mcp</code>.</li>
+                <li>Appelez <code>list_tickets</code> et <code>get_ticket</code> depuis l'Inspector, en ère <code>modern</code> puis <code>legacy</code>.</li>
+                <li>Rejouez vos requêtes <code>curl</code> d'erreur du chapitre « Le protocole » : comparez les réponses avec celles de <code>tickets-raw</code>.</li>
+                <li>Branchez le serveur dans VS Code et interrogez-le depuis Copilot.</li>
+            </ol>
+        </div>
+    </section>
+
+</section>

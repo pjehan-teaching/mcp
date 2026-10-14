@@ -1,0 +1,321 @@
+<section id="first-server">
+
+    <section>
+        <h2>Un premier serveur avec Symfony</h2>
+    </section>
+
+    <section>
+        <h3>Objectif</h3>
+        <p>Sans attendre, écrivons un serveur <abbr title="Model Context Protocol">MCP</abbr> <strong>à la main</strong>, dans une application Symfony, sans <abbr title="Software Development Kit">SDK</abbr>.</p>
+        <ul>
+            <li>Le fil rouge : une application de <strong>tickets de support</strong> (Doctrine + SQLite)</li>
+            <li>Un seul contrôleur, une seule route : <code>POST /mcp</code></li>
+            <li>Trois méthodes : <code>server/discover</code>, <code>tools/list</code> et <code>tools/call</code></li>
+            <li>Un seul tool : <code>list_tickets</code></li>
+        </ul>
+        <p><mark>Un serveur MCP est un simple point d'entrée HTTP qui reçoit et renvoie du JSON.</mark></p>
+        <p>Le chapitre suivant enrichira ce contrôleur, règle après règle, en découvrant le protocole.</p>
+    </section>
+
+    <section>
+        <h3>Créer le projet</h3>
+        <pre><code class="language-bash">symfony new tickets-raw
+# sans le binaire symfony : composer create-project symfony/skeleton tickets-raw
+cd tickets-raw
+composer require orm serializer # répondre « n » à la recette Docker
+composer require --dev orm-fixtures maker</code></pre>
+        <p>Une base SQLite suffit : on la déclare dans <code>.env.local</code>, qui surcharge <code>.env</code> :</p>
+        <pre><code class="language-bash">echo 'DATABASE_URL="sqlite:///%kernel.project_dir%/var/data.db"' &gt; .env.local</code></pre>
+        <ul>
+            <li><code>symfony new</code> : Symfony 8.1, PHP 8.4 ou plus</li>
+            <li><code>orm</code> : Doctrine ORM ; <code>serializer</code> : transforme les objets en JSON</li>
+            <li><code>orm-fixtures</code> : données de départ ; <code>maker</code> : générateurs de code (<code>make:entity</code>…)</li>
+        </ul>
+        <footer>
+            <a href="https://symfony.com/doc/current/setup.html" target="_blank" class="info">Installing Symfony</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>L'entité <code>Ticket</code></h3>
+        <p>Un ticket a un titre, une description, un statut (<code>open</code> ou <code>closed</code>) et, éventuellement, un assigné.</p>
+        <pre><code class="language-bash">php bin/console make:entity Ticket \
+    --field=title:string \
+    --field=description:text \
+    --field=status:string:20 \
+    --field='assignee:string?'</code></pre>
+        <ul>
+            <li>Syntaxe : <code>nom:type:longueur</code> ; <code>?</code> rend la propriété <strong>nullable</strong></li>
+            <li>L'identifiant <code>id</code> est ajouté automatiquement</li>
+            <li>La commande crée <code>src/Entity/Ticket.php</code> (propriétés privées, <strong>getters</strong> et <strong>setters</strong>) et <code>src/Repository/TicketRepository.php</code></li>
+        </ul>
+        <footer>
+            <a href="https://symfony.com/doc/current/doctrine.html#creating-an-entity-class" target="_blank" class="info">Creating an Entity Class</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Les données de départ</h3>
+        <p>Trois tickets d'exemple dans <code>src/DataFixtures/AppFixtures.php</code> :</p>
+        <pre style="font-size: 0.45em;"><code class="language-php">public function load(ObjectManager $manager): void
+{
+    $login = new Ticket()
+        -&gt;setTitle('Connexion impossible')
+        -&gt;setDescription('Le client ne parvient plus à se connecter depuis la mise à jour.')
+        -&gt;setStatus('open');
+
+    $invoice = new Ticket()
+        -&gt;setTitle('Facture en double')
+        -&gt;setDescription('La facture de septembre a été envoyée deux fois.')
+        -&gt;setStatus('open')
+        -&gt;setAssignee('alice');
+
+    $export = new Ticket()
+        -&gt;setTitle('Export CSV vide')
+        -&gt;setDescription('Le fichier exporté ne contient que les en-têtes.')
+        -&gt;setStatus('closed')
+        -&gt;setAssignee('bob');
+
+    $manager-&gt;persist($login);
+    $manager-&gt;persist($invoice);
+    $manager-&gt;persist($export);
+    $manager-&gt;flush();
+}</code></pre>
+    </section>
+
+    <section>
+        <h3>Créer la base</h3>
+        <pre><code class="language-bash">php bin/console make:migration
+php bin/console doctrine:migrations:migrate
+php bin/console doctrine:fixtures:load -n
+php bin/console dbal:run-sql "SELECT id, title, status FROM ticket"</code></pre>
+        <pre style="font-size: 0.6em;"><code class="language-none"> ---- ---------------------- --------
+  id   title                  status
+ ---- ---------------------- --------
+  1    Connexion impossible   open
+  2    Facture en double      open
+  3    Export CSV vide        closed
+ ---- ---------------------- --------</code></pre>
+        <p><code>make:migration</code> génère dans <code>migrations/</code> le SQL qui crée la table <code>ticket</code> ; <code>doctrine:migrations:migrate</code> l'exécute.</p>
+        <footer>
+            <a href="https://symfony.com/doc/current/doctrine.html#migrations-creating-the-database-tables-schema" target="_blank" class="info">Migrations</a>
+            <a href="https://symfony.com/bundles/DoctrineFixturesBundle/current/index.html" target="_blank" class="info">DoctrineFixturesBundle</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Ce que reçoit le serveur</h3>
+        <p>Le client envoie une requête <strong><abbr title="JSON Remote Procedure Call">JSON-RPC</abbr> 2.0</strong> dans le corps d'un <code>POST</code> :</p>
+        <pre style="font-size: 0.55em;"><code class="language-json">{
+  "jsonrpc": "2.0",
+  "id": 3,
+  "method": "tools/call",
+  "params": { "name": "list_tickets", "arguments": { "status": "open" } }
+}</code></pre>
+        <p>Le serveur répond avec le <strong>même <code>id</code></strong> et un <code>result</code> :</p>
+        <pre style="font-size: 0.55em;"><code class="language-json">{
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "resultType": "complete",
+    "content": [{ "type": "text", "text": "[{\"id\":1,\"title\":\"Connexion impossible\",…}]" }]
+  }
+}</code></pre>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/basic" target="_blank" class="info">Base protocol</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Trois méthodes suffisent</h3>
+        <table>
+            <thead>
+                <tr><th>Méthode</th><th>Le client demande…</th><th>Le serveur renvoie…</th></tr>
+            </thead>
+            <tbody>
+                <tr><td><code>server/discover</code></td><td>qui es-tu, que sais-tu faire ?</td><td>versions supportées, capacités</td></tr>
+                <tr><td><code>tools/list</code></td><td>quels tools proposes-tu ?</td><td>nom, description et schéma de chaque tool</td></tr>
+                <tr><td><code>tools/call</code></td><td>exécute ce tool avec ces arguments</td><td>le résultat du tool</td></tr>
+            </tbody>
+        </table>
+        <ul>
+            <li>Le host transmet la liste des tools au <strong>modèle</strong></li>
+            <li>Le modèle choisit un tool et ses arguments, le client exécute <code>tools/call</code></li>
+            <li><code>capabilities</code> annonce les <strong>familles</strong> prises en charge (<code>tools</code>, <code>resources</code>…), pas leur contenu : le client obtient la liste des tools avec <code>tools/list</code></li>
+        </ul>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/server/tools" target="_blank" class="info">Tools</a>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/server/discover" target="_blank" class="info">Discovery</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3><code>McpController</code> : la route</h3>
+        <pre style="font-size: 0.5em;" data-line="11,14-17" class="line-numbers"><code class="language-php">&lt;?php
+
+namespace App\Controller;
+
+use App\Repository\TicketRepository;
+use Symfony\Component\HttpFoundation\JsonResponse;
+use Symfony\Component\HttpFoundation\Request;
+use Symfony\Component\Routing\Attribute\Route;
+use Symfony\Component\Serializer\SerializerInterface;
+
+#[Route('/mcp', name: 'mcp', methods: ['POST'])]
+final class McpController
+{
+    public function __construct(
+        private readonly TicketRepository $tickets,
+        private readonly SerializerInterface $serializer,
+    ) {
+    }</code></pre>
+        <ul>
+            <li>La route n'accepte que <code>POST</code> : un <code>GET</code> reçoit automatiquement <code>405 Method Not Allowed</code></li>
+            <li>Le dépôt et le <strong>Serializer</strong> sont injectés par l'<strong>autowiring</strong></li>
+            <li>Pas besoin d'<code>AbstractController</code> : le contrôleur n'utilise aucun de ses raccourcis</li>
+        </ul>
+    </section>
+
+    <section>
+        <h3><code>McpController</code> : router les méthodes</h3>
+        <pre style="font-size: 0.5em;" data-line="25-34" data-start="20" class="line-numbers"><code class="language-php">    public function __invoke(Request $request): JsonResponse
+    {
+        $message = json_decode($request-&gt;getContent(), true);
+        $params = $message['params'] ?? [];
+
+        $result = match ($message['method']) {
+            'server/discover' =&gt; [
+                'supportedVersions' =&gt; ['2026-07-28'],
+                'capabilities' =&gt; ['tools' =&gt; new \stdClass()],
+                'ttlMs' =&gt; 3_600_000,
+                'cacheScope' =&gt; 'public',
+            ],
+            'tools/list' =&gt; ['tools' =&gt; [$this-&gt;listTicketsTool()], 'ttlMs' =&gt; 300_000, 'cacheScope' =&gt; 'public'],
+            'tools/call' =&gt; $this-&gt;listTickets($params['arguments'] ?? []),
+        };
+
+        return new JsonResponse([
+            'jsonrpc' =&gt; '2.0',
+            'id' =&gt; $message['id'],
+            'result' =&gt; ['resultType' =&gt; 'complete', ...$result],
+        ]);
+    }</code></pre>
+        <ul>
+            <li><code>ttlMs</code> et <code>cacheScope</code> indiquent au client combien de temps il peut garder la réponse : <strong>obligatoires</strong> pour <code>server/discover</code> et les listes, sans quoi l'Inspector rejette la réponse</li>
+            <li><code>new \stdClass()</code> produit un objet JSON vide <code>{}</code>, là où <code>[]</code> produirait un tableau</li>
+            <li><code>new JsonResponse()</code> encode avec <code>json_encode()</code> ; <code>$this-&gt;json()</code> passerait par le Serializer, qui transformerait ce <code>{}</code> en <code>[]</code></li>
+        </ul>
+    </section>
+
+    <section>
+        <h3>Pourquoi <code>__invoke()</code> ?</h3>
+        <p><code>__invoke()</code> est une méthode magique de PHP : elle rend un objet <strong>appelable comme une fonction</strong>.</p>
+        <pre><code class="language-php">$controller($request); // équivaut à $controller-&gt;__invoke($request)</code></pre>
+        <ul>
+            <li>Quand une route pointe vers une classe, Symfony appelle <code>__invoke()</code></li>
+            <li>Un serveur MCP n'a qu'<strong>un seul point d'entrée</strong> : la classe entière est l'action</li>
+            <li>L'attribut <code>#[Route]</code> se place alors sur la classe</li>
+        </ul>
+        <p>Même convention que les listeners, les handlers Messenger ou les commandes invocables : <mark>une classe, une responsabilité</mark>.</p>
+        <footer>
+            <a href="https://symfony.com/doc/current/controller/service.html#invokable-controllers" target="_blank" class="info">Invokable controllers</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3><code>McpController</code> : décrire le tool</h3>
+        <p>Un tool est décrit par un nom, une description et un <strong>JSON Schema</strong> de ses arguments :</p>
+        <pre style="font-size: 0.5em;" data-line="48-53" data-start="43" class="line-numbers"><code class="language-php">    private function listTicketsTool(): array
+    {
+        return [
+            'name' =&gt; 'list_tickets',
+            'description' =&gt; 'Liste les tickets de support, éventuellement filtrés par statut.',
+            'inputSchema' =&gt; [
+                'type' =&gt; 'object',
+                'properties' =&gt; [
+                    'status' =&gt; ['type' =&gt; 'string', 'enum' =&gt; ['open', 'closed']],
+                ],
+            ],
+        ];
+    }</code></pre>
+        <p>Le modèle ne voit que ces informations pour décider d'appeler le tool : <mark>la description compte autant que le code</mark>.</p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/server/tools#tool" target="_blank" class="info">Tool</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3><code>McpController</code> : exécuter le tool</h3>
+        <pre style="font-size: 0.45em;" data-line="62-65" data-start="57" class="line-numbers"><code class="language-php">    private function listTickets(array $arguments): array
+    {
+        $status = $arguments['status'] ?? null;
+        $tickets = $status ? $this-&gt;tickets-&gt;findBy(['status' =&gt; $status]) : $this-&gt;tickets-&gt;findAll();
+
+        return ['content' =&gt; [[
+            'type' =&gt; 'text',
+            'text' =&gt; $this-&gt;serializer-&gt;serialize($tickets, 'json'),
+        ]]];
+    }
+}</code></pre>
+        <ul>
+            <li>Le résultat est une liste de <strong>contenus</strong> destinés au modèle : ici un seul texte</li>
+            <li>Les tickets sont donc encodés en JSON <strong>dans</strong> une chaîne de caractères</li>
+            <li><code>serialize()</code> lit chaque propriété du ticket <strong>par son getter</strong></li>
+        </ul>
+        <p class="console-error">Pour l'instant, <code>tools/call</code> ignore le nom du tool demandé : nous corrigerons cela au chapitre suivant.</p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/specification/2026-07-28/server/tools#tool-result" target="_blank" class="info">Tool result</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Lancer et tester</h3>
+        <p>On lance le serveur web local de Symfony, en HTTP :</p>
+        <pre><code class="language-bash">symfony serve --no-tls
+# sans le binaire symfony : php -S localhost:8000 -t public</code></pre>
+        <p>Dans un autre terminal, listons les tools :</p>
+        <pre style="font-size: 0.55em;"><code class="language-bash">curl -X POST http://localhost:8000/mcp \
+  -H 'Content-Type: application/json' \
+  -d '{"jsonrpc": "2.0", "id": 2, "method": "tools/list"}'</code></pre>
+        <pre style="font-size: 0.5em;"><code class="language-json">{"jsonrpc":"2.0","id":2,"result":{"resultType":"complete","tools":[{"name":"list_tickets",
+  "description":"Liste les tickets de support, …","inputSchema":{"type":"object",…}}],
+  "ttlMs":300000,"cacheScope":"public"}}</code></pre>
+    </section>
+
+    <section>
+        <h3>Appeler le tool</h3>
+        <pre style="font-size: 0.55em;"><code class="language-bash">curl -X POST http://localhost:8000/mcp \
+  -H 'Content-Type: application/json' \
+  -d '{"jsonrpc": "2.0", "id": 3, "method": "tools/call",
+       "params": {"name": "list_tickets", "arguments": {"status": "open"}}}'</code></pre>
+        <p>Réponse (mise en forme) :</p>
+        <pre style="font-size: 0.5em;"><code class="language-json">{
+  "jsonrpc": "2.0",
+  "id": 3,
+  "result": {
+    "resultType": "complete",
+    "content": [{
+      "type": "text",
+      "text": "[{\"id\":1,\"title\":\"Connexion impossible\",…,\"status\":\"open\",\"assignee\":null},
+               {\"id\":2,\"title\":\"Facture en double\",…,\"status\":\"open\",\"assignee\":\"alice\"}]"
+    }]
+  }
+}</code></pre>
+        <p><mark>C'est exactement ce que fera un client MCP à la demande du modèle.</mark></p>
+    </section>
+
+    <section>
+        <h3>Exercice</h3>
+        <p>Écrivez votre premier serveur MCP.</p>
+        <div class="instructions">
+            <ol>
+                <li>Créez le projet <code>tickets-raw</code>, l'entité <code>Ticket</code> avec <code>make:entity</code>, les fixtures, puis la base.</li>
+                <li>Créez <code>src/Controller/McpController.php</code> et lancez <code>symfony serve --no-tls</code>.</li>
+                <li>Testez <code>server/discover</code>, <code>tools/list</code> et <code>tools/call</code> avec <code>curl</code>.</li>
+                <li>Appelez <code>list_tickets</code> sans argument, puis avec <code>"status": "closed"</code>.</li>
+                <li>Envoyez une méthode inconnue (<code>prompts/list</code>) et une requête <code>GET</code> : que se passe-t-il ?</li>
+            </ol>
+        </div>
+    </section>
+
+</section>

@@ -1,0 +1,260 @@
+<section id="mcp-apps">
+
+    <section>
+        <h2>MCP Apps</h2>
+    </section>
+
+    <section>
+        <h3>Les extensions</h3>
+        <ul>
+            <li>Fonctionnalités <strong>facultatives</strong>, définies en dehors du cœur de la spécification</li>
+            <li>Identifiées par <code>{préfixe}/{nom}</code> : <code>io.modelcontextprotocol/ui</code></li>
+            <li>Utilisées seulement si le client <strong>et</strong> le serveur les déclarent</li>
+        </ul>
+        <table>
+            <thead>
+                <tr><th>Extension officielle</th><th>Rôle</th></tr>
+            </thead>
+            <tbody>
+                <tr><td><strong><abbr title="Model Context Protocol">MCP</abbr> Apps</strong></td><td>Interfaces HTML interactives affichées dans la conversation</td></tr>
+                <tr><td><strong>Tasks</strong></td><td>Opérations longues, suivies par interrogation</td></tr>
+                <tr><td><strong>Skills</strong></td><td>Instructions et fichiers de workflow servis par un serveur</td></tr>
+                <tr><td><strong>Auth</strong></td><td>Client credentials, autorisation gérée par l'entreprise</td></tr>
+            </tbody>
+        </table>
+        <footer>
+            <a href="https://modelcontextprotocol.io/extensions/overview" target="_blank" class="info">Extensions overview</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Négocier une extension</h3>
+        <div class="container">
+            <div class="col">
+                <h4>Client, à chaque requête</h4>
+                <pre><code class="language-json">"_meta": {
+  "io.modelcontextprotocol/clientCapabilities": {
+    "extensions": {
+      "io.modelcontextprotocol/ui": {
+        "mimeTypes": ["text/html;profile=mcp-app"]
+      }
+    }
+  }
+}</code></pre>
+            </div>
+            <div class="col">
+                <h4>Serveur, dans <code>server/discover</code></h4>
+                <pre><code class="language-json">"capabilities": {
+  "tools": {},
+  "resources": {},
+  "extensions": {
+    "io.modelcontextprotocol/ui": {
+      "mimeTypes": ["text/html;profile=mcp-app"]
+    }
+  }
+}</code></pre>
+            </div>
+        </div>
+        <p>Un serveur peut vérifier la prise en charge avant de s'appuyer sur une extension : <code>$context-&gt;getClientGateway()-&gt;supportsExtension(McpApps::EXTENSION_ID)</code>.</p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/extensions/overview#negotiation" target="_blank" class="info">Negotiation</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>MCP Apps</h3>
+        <p>Un tool peut afficher une <strong>interface HTML interactive</strong> directement dans la conversation : tableau de bord, formulaire, visualisation…</p>
+        <ul>
+            <li><strong>Contexte conservé</strong> : l'interface vit dans la conversation, sans changer d'onglet</li>
+            <li><strong>Échanges dans les deux sens</strong> : la vue appelle les tools du serveur via le host</li>
+            <li><strong>Sécurité</strong> : la vue s'exécute dans un iframe isolé, sans accès à la page du host</li>
+        </ul>
+        <p>Pris en charge par Claude, VS Code + GitHub Copilot, ChatGPT, Cursor, Goose…</p>
+        <footer>
+            <a href="https://modelcontextprotocol.io/extensions/apps/overview" target="_blank" class="info">MCP Apps</a>
+            <a href="https://modelcontextprotocol.io/extensions/client-matrix" target="_blank" class="info">Extension support matrix</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Fonctionnement</h3>
+        <pre style="font-size: 0.5em;"><code class="language-none">Host                                        Vue (iframe)                                       Serveur MCP
+│ tools/list : _meta.ui.resourceUri               │                                                 │
+│◄──────────────────────────────────────────────────────────────────────────────────────────────────│
+│ resources/read ui://tickets/dashboard           │                                                 │
+│──────────────────────────────────────────────────────────────────────────────────────────────────►│
+│ HTML affiché, isolé                             │                                                 │
+│────────────────────────────────────────────────►│                                                 │
+│ ui/initialize                                   │                                                 │
+│◄────────────────────────────────────────────────│                                                 │
+│ tools/call show_dashboard (modèle)              │                                                 │
+│──────────────────────────────────────────────────────────────────────────────────────────────────►│
+│ ui/notifications/tool-result                    │                                                 │
+│────────────────────────────────────────────────►│                                                 │
+│ tools/call (bouton)                             │                                                 │
+│◄────────────────────────────────────────────────│                                                 │
+│ tools/call relayé par le host                   │                                                 │
+│──────────────────────────────────────────────────────────────────────────────────────────────────►│</code></pre>
+        <p>La vue et le host communiquent par <code>postMessage</code> avec des messages <abbr title="JSON Remote Procedure Call">JSON-RPC</abbr> : <code>ui/initialize</code>, <code>ui/notifications/tool-result</code>, <code>tools/call</code>…</p>
+        <footer>
+            <a href="https://github.com/modelcontextprotocol/ext-apps" target="_blank" class="info">ext-apps</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Une app = une classe</h3>
+        <p>Le bundle fournit l'attribut <code>#[AsMcpApp]</code> (<code>composer require symfony/twig-bundle</code>) :</p>
+        <pre style="font-size: 0.45em;" data-line="9-16,25-28" class="line-numbers"><code class="language-php">&lt;?php
+
+namespace App\Mcp;
+
+use App\Repository\TicketRepository;
+use Symfony\AI\McpBundle\Attribute\AsMcpApp;
+use Symfony\Component\Serializer\Normalizer\NormalizerInterface;
+
+#[AsMcpApp(
+    uri: 'ui://tickets/dashboard',
+    name: 'show_dashboard',
+    title: 'Tickets',
+    description: 'Affiche le tableau de bord interactif des tickets.',
+    template: 'mcp/dashboard.html.twig',
+    toolTemplate: 'mcp/_tickets.html.twig',
+)]
+final class TicketDashboard
+{
+    public function __construct(
+        private readonly TicketRepository $tickets,
+        private readonly NormalizerInterface $normalizer,
+    ) {
+    }
+
+    public function render(): array
+    {
+        return ['tickets' =&gt; $this-&gt;normalizer-&gt;normalize($this-&gt;tickets-&gt;findAll())];
+    }
+}</code></pre>
+        <p>Les tickets sont normalisés : le tableau renvoyé sert aussi de <code>structuredContent</code>, et un objet aux propriétés privées y deviendrait <code>{}</code>.</p>
+        <footer>
+            <a href="https://symfony.com/doc/current/ai/bundles/mcp-bundle.html#mcp-apps" target="_blank" class="info">Bundle : MCP Apps</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Ce que fait <code>#[AsMcpApp]</code></h3>
+        <ul>
+            <li>Enregistre la resource <code>ui://tickets/dashboard</code>, de type <code>text/html;profile=mcp-app</code>, à partir de <code>template</code></li>
+            <li>Enregistre le tool <code>show_dashboard</code>, dont le résultat est renvoyé par <code>render()</code> et le schéma déduit de sa signature</li>
+            <li>Lie le tool à la vue dans sa définition :</li>
+        </ul>
+        <pre><code class="language-json">"_meta": {
+  "ui": { "resourceUri": "ui://tickets/dashboard", "visibility": ["model", "app"] }
+}</code></pre>
+        <ul>
+            <li>Active l'extension <code>io.modelcontextprotocol/ui</code> dans les capacités du serveur</li>
+            <li>Rend <code>toolTemplate</code> avec le tableau renvoyé, et l'ajoute au résultat dans un champ <code>html</code></li>
+        </ul>
+        <footer>
+            <a href="https://modelcontextprotocol.io/extensions/apps/overview" target="_blank" class="info">MCP Apps</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>La vue : deux templates Twig</h3>
+        <div class="container">
+            <div class="col">
+                <pre style="font-size: 0.5em;"><code class="language-twig">{# templates/mcp/dashboard.html.twig #}
+{% extends '@Mcp/app/base.html.twig' %}
+
+{% block style %}
+    table { border-collapse: collapse; font: 0.9rem system-ui; }
+    td { padding: 0.25rem 0.5rem; border-bottom: 1px solid #ddd; }
+{% endblock %}</code></pre>
+                <p>La <strong>coquille</strong> : lue une seule fois par le host, elle reste statique.</p>
+            </div>
+            <div class="col">
+                <pre style="font-size: 0.5em;"><code class="language-twig">{# templates/mcp/_tickets.html.twig #}
+&lt;table&gt;
+    {% for ticket in tickets %}
+        &lt;tr&gt;
+            &lt;td&gt;#{{ ticket.id }}&lt;/td&gt;
+            &lt;td&gt;{{ ticket.title }}&lt;/td&gt;
+            &lt;td&gt;{{ ticket.status }}&lt;/td&gt;
+        &lt;/tr&gt;
+    {% endfor %}
+&lt;/table&gt;
+&lt;button data-call="show_dashboard"&gt;Rafraîchir&lt;/button&gt;</code></pre>
+                <p>Le <strong>fragment</strong> : rendu à chaque appel du tool, injecté dans la coquille.</p>
+            </div>
+        </div>
+        <p>Twig échappe les titres : <mark>un ticket dont le titre contient du HTML s'affiche comme du texte</mark>.</p>
+        <footer>
+            <a href="https://symfony.com/doc/current/ai/bundles/mcp-bundle.html#rendering-with-twig-html-over-the-wire" target="_blank" class="info">Rendering with Twig</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Ce que fait le template de base</h3>
+        <p><code>@Mcp/app/base.html.twig</code> implémente le dialogue avec le host, par <code>postMessage</code> et messages <abbr title="JSON Remote Procedure Call">JSON-RPC</abbr> :</p>
+        <ol>
+            <li>la vue envoie <code>ui/initialize</code>, puis <code>ui/notifications/initialized</code> quand elle est prête</li>
+            <li>le host lui transmet le résultat du tool avec <code>ui/notifications/tool-result</code></li>
+            <li>la fonction <code>render(model)</code> injecte <code>model.html</code> dans l'élément <code>#root</code></li>
+            <li>un élément <code>data-call="…"</code> déclenche un <code>tools/call</code>, relayé par le host vers le serveur</li>
+            <li>la vue signale sa taille avec <code>ui/notifications/size-changed</code></li>
+        </ol>
+        <p>Pour une interface très riche, on peut surcharger le bloc <code>app_script</code> et écrire son propre JavaScript.</p>
+        <footer>
+            <a href="https://github.com/modelcontextprotocol/ext-apps" target="_blank" class="info">ext-apps</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Rendre la vue interactive</h3>
+        <p>Un tool réservé à la vue s'ajoute sur une méthode de la même classe :</p>
+        <pre style="font-size: 0.5em;"><code class="language-php">    #[AsMcpAppTool(name: 'filter_dashboard', template: 'mcp/_tickets.html.twig', appOnly: true)]
+    public function filter(string $status): array
+    {
+        return ['tickets' =&gt; $this-&gt;normalizer-&gt;normalize($this-&gt;tickets-&gt;findBy(['status' =&gt; $status]))];
+    }</code></pre>
+        <pre><code class="language-twig">&lt;button data-call="filter_dashboard" data-arg-status="open"&gt;Ouverts&lt;/button&gt;</code></pre>
+        <ul>
+            <li><code>appOnly: true</code> : le tool est appelable par la vue, mais absent de la liste vue par le modèle (<code>"visibility": ["app"]</code>)</li>
+            <li><code>data-arg-status</code> devient l'argument <code>status</code> ; le fragment renvoyé remplace le contenu de <code>#root</code></li>
+        </ul>
+        <footer>
+            <a href="https://symfony.com/doc/current/ai/bundles/mcp-bundle.html#interactive-apps" target="_blank" class="info">Interactive apps</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Tester l'application</h3>
+        <ul>
+            <li>Dans VS Code, demandez : « Affiche le tableau de bord des tickets »</li>
+            <li>Le résultat du tool s'affiche dans la vue, puis le bouton <strong>Rafraîchir</strong> rappelle le tool</li>
+            <li>L'Inspector vérifie la liaison entre tool et resource :</li>
+        </ul>
+        <pre style="font-size: 0.55em;"><code class="language-bash">npx @modelcontextprotocol/inspector --cli --config inspector.json --server tickets \
+  --method tools/list --app-info</code></pre>
+        <pre style="font-size: 0.5em;"><code class="language-json">{"hasApp":true,"toolName":"show_dashboard","resourceUri":"ui://tickets/dashboard","visibility":["model","app"],…}
+{"hasApp":true,"toolName":"filter_dashboard","resourceUri":"ui://tickets/dashboard","visibility":["app"],…}
+{"hasApp":false,"toolName":"list_tickets"}</code></pre>
+        <footer>
+            <a href="https://modelcontextprotocol.io/extensions/apps/build" target="_blank" class="info">Build an MCP App</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Exercice</h3>
+        <p>Ajoutez un tableau de bord interactif au fil rouge.</p>
+        <div class="instructions">
+            <ol>
+                <li>Installez <code>symfony/twig-bundle</code>, créez <code>src/Mcp/TicketDashboard.php</code> et ses deux templates Twig.</li>
+                <li>Vérifiez avec l'Inspector que <code>show_dashboard</code> est bien lié à <code>ui://tickets/dashboard</code>.</li>
+                <li>Affichez le tableau de bord depuis Copilot, fermez un ticket dans la conversation puis cliquez sur <strong>Rafraîchir</strong>.</li>
+                <li>Créez un ticket dont le titre contient du HTML : vérifiez qu'il s'affiche comme du texte.</li>
+                <li>Bonus : des boutons <strong>Ouverts</strong> et <strong>Fermés</strong> qui filtrent la liste avec un <code>#[AsMcpAppTool]</code>.</li>
+            </ol>
+        </div>
+    </section>
+
+</section>
