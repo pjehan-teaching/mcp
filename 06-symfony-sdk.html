@@ -26,11 +26,14 @@
         <pre style="font-size: 0.55em;"><code class="language-bash">symfony new tickets
 cd tickets
 composer require orm serializer symfony/mcp-bundle nyholm/psr7 # « n » à la recette Docker
-composer require --dev orm-fixtures maker</code></pre>
+composer require --dev orm-fixtures maker
+echo 'DATABASE_URL="sqlite:///%kernel.project_dir%/var/data.db"' &gt; .env.local
+php bin/console make:entity Ticket --field=title:string --field=description:text --field=status:string:20 --field='assignee:string?'</code></pre>
         <ul>
             <li><code>nyholm/psr7</code> : le transport HTTP du SDK manipule des requêtes <strong>PSR-7</strong> ; sans implémentation, chaque requête échoue en <code>500</code></li>
-            <li>Copiez depuis <code>tickets-raw</code> : <code>.env.local</code>, l'entité <code>Ticket</code>, <code>TicketRepository</code> et <code>AppFixtures</code></li>
-            <li>Recréez la base : <code>make:migration</code>, <code>doctrine:migrations:migrate</code> puis <code>doctrine:fixtures:load</code></li>
+            <li>Mêmes commandes que pour <code>tickets-raw</code> : <code>.env.local</code>, entité <code>Ticket</code> et <code>TicketRepository</code></li>
+            <li>Il ne reste qu'à copier <code>src/DataFixtures/AppFixtures.php</code> depuis <code>tickets-raw</code></li>
+            <li>Créez la base : <code>make:migration</code>, <code>doctrine:migrations:migrate</code> puis <code>doctrine:fixtures:load</code></li>
             <li>Les tools renvoient des tableaux : le <code>NormalizerInterface</code> du Serializer y transforme les tickets</li>
         </ul>
         <footer>
@@ -40,7 +43,7 @@ composer require --dev orm-fixtures maker</code></pre>
 
     <section>
         <h3>Configurer le serveur</h3>
-        <p>Le bundle n'a pas de recette Flex : les deux fichiers s'écrivent à la main.</p>
+        <p>Le bundle n'a pas de recette Flex : <code>config/packages/mcp.yaml</code> n'existe pas après l'installation, il faut le <strong>créer</strong>. Dans <code>config/routes.yaml</code>, il suffit d'<strong>ajouter</strong> la route <code>mcp</code>.</p>
         <div class="container">
             <div class="col">
                 <pre><code class="language-yaml"># config/packages/mcp.yaml
@@ -96,7 +99,7 @@ final class TicketTools
      * Liste les tickets de support, éventuellement filtrés par statut.
      */
     #[McpTool(name: 'list_tickets')]
-    public function list(#[Schema(enum: ['open', 'closed'])] ?string $status = null): array
+    public function list(#[Schema(type: 'string', enum: ['open', 'closed'])] ?string $status = null): array
     {
         $tickets = $status ? $this-&gt;tickets-&gt;findBy(['status' =&gt; $status]) : $this-&gt;tickets-&gt;findAll();
 
@@ -175,6 +178,22 @@ npx @modelcontextprotocol/inspector --cli --config inspector.json --server ticke
     </section>
 
     <section>
+        <h3>Un serveur adapté au flux d'écoute</h3>
+        <p class="console-error">En ère <code>modern</code>, la liste des tools met 30 secondes à s'afficher dans l'Inspector.</p>
+        <p>L'Inspector ouvre <code>subscriptions/listen</code>, un flux <abbr title="Server-Sent Events">SSE</abbr> que le SDK garde ouvert <strong>30 secondes</strong>. Deux réglages de PHP sont nécessaires :</p>
+        <ul>
+            <li><strong>Pas de tampon de sortie</strong> (<code>output_buffering=0</code>) : sinon l'accusé de réception du flux reste dans le tampon et l'Inspector attend sa fin avant de lister les tools</li>
+            <li><strong>Plusieurs processus</strong> (<code>PHP_CLI_SERVER_WORKERS</code>) : un serveur à un seul processus ne peut pas répondre à <code>tools/list</code> tant que le flux est ouvert</li>
+        </ul>
+        <p>Remplacez <code>symfony serve</code> par le serveur interne de PHP :</p>
+        <pre style="font-size: 0.55em;"><code class="language-bash">PHP_CLI_SERVER_WORKERS=4 php -S localhost:8000 -t public -d output_buffering=0</code></pre>
+        <p><mark>Un flux ouvert longtemps demande un serveur qui l'envoie immédiatement et qui reste disponible pour les autres requêtes.</mark></p>
+        <footer>
+            <a href="https://www.php.net/manual/features.commandline.webserver" target="_blank" class="info">Serveur web interne de PHP</a>
+        </footer>
+    </section>
+
+    <section>
         <h3>Le résultat produit par le SDK</h3>
         <pre style="font-size: 0.45em;"><code class="language-json">{
   "content": [{
@@ -193,7 +212,8 @@ npx @modelcontextprotocol/inspector --cli --config inspector.json --server ticke
 }</code></pre>
         <ul>
             <li><code>structuredContent</code> : les mêmes données, exploitables par le client sans parser de texte</li>
-            <li>Le schéma généré pour <code>?string $status = null</code> : <code>{"type": ["null", "string"], "default": null, "enum": ["open", "closed"]}</code></li>
+            <li>Le schéma généré pour <code>?string $status = null</code> : <code>{"type": "string", "default": null, "enum": ["open", "closed"]}</code></li>
+            <li>Sans <code>type: 'string'</code> dans <code>#[Schema]</code>, le SDK déduirait <code>"type": ["null", "string"]</code> : légal, mais <strong>moins portable</strong>, l'Inspector le signale car certains clients (Gemini) n'acceptent qu'un seul <code>type</code></li>
         </ul>
         <footer>
             <a href="https://modelcontextprotocol.io/specification/2026-07-28/server/tools#structured-content" target="_blank" class="info">Structured content</a>
@@ -252,7 +272,7 @@ npx @modelcontextprotocol/inspector --cli --config inspector.json --server ticke
         <p>Créez le serveur du fil rouge avec le SDK.</p>
         <div class="instructions">
             <ol>
-                <li>Créez le projet <code>tickets</code>, installez les paquets et copiez l'entité, le dépôt, les fixtures et <code>.env.local</code>.</li>
+                <li>Créez le projet <code>tickets</code>, installez les paquets, créez <code>.env.local</code> et l'entité avec <code>make:entity</code>, puis copiez <code>AppFixtures</code> et créez la base.</li>
                 <li>Écrivez <code>mcp.yaml</code>, la route et <code>src/Mcp/TicketTools.php</code>, puis vérifiez avec <code>debug:mcp</code>.</li>
                 <li>Appelez <code>list_tickets</code> et <code>get_ticket</code> depuis l'Inspector, en ère <code>modern</code> puis <code>legacy</code>.</li>
                 <li>Rejouez vos requêtes <code>curl</code> d'erreur du chapitre « Le protocole » : comparez les réponses avec celles de <code>tickets-raw</code>.</li>

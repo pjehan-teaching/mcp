@@ -1,0 +1,501 @@
+<section id="webmcp">
+
+    <section>
+        <h2>WebMCP</h2>
+    </section>
+
+    <section>
+        <h3>Le problème de l'actuation</h3>
+        <p>Un <strong>agent de navigateur</strong> (assistant intégré, extension…) accomplit des tâches pour l'utilisateur sur les pages qu'il visite.</p>
+        <ul>
+            <li>Sans aide, il fait de l'<strong>actuation</strong> : il lit le DOM, devine le rôle d'un bouton, simule clics et saisies</li>
+            <li>Chaque étape est sujette à interprétation : lent, fragile, et un redesign suffit à tout casser</li>
+            <li>Avec <strong>WebMCP</strong>, la page <strong>déclare</strong> ses tools : un nom, une description, un JSON Schema</li>
+            <li>Le tool s'exécute <strong>dans la page, sous les yeux de l'utilisateur</strong></li>
+        </ul>
+        <p><mark>L'agent appelle une fonction au lieu de deviner l'interface.</mark></p>
+        <footer>
+            <a href="https://developer.chrome.com/docs/ai/webmcp" target="_blank" class="info">WebMCP</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>WebMCP en bref</h3>
+        <ul>
+            <li><strong>Proposition de standard web</strong>, portée par le groupe communautaire Web Machine Learning du W3C</li>
+            <li><strong>Inspirée de <abbr title="Model Context Protocol">MCP</abbr></strong> : n'en reprend que les tools, sans JSON-RPC, resources ni prompts</li>
+            <li>Deux API :
+                <ul>
+                    <li><strong>impérative</strong> : JavaScript, <code>document.modelContext.registerTool()</code></li>
+                    <li><strong>déclarative</strong> : attributs HTML sur un <code>&lt;form&gt;</code></li>
+                </ul>
+            </li>
+            <li><strong>Amélioration progressive</strong> : sans agent, la page fonctionne comme avant</li>
+            <li>Les tools n'existent que <strong>tant que la page est ouverte</strong></li>
+        </ul>
+        <footer>
+            <a href="https://github.com/webmachinelearning/webmcp" target="_blank" class="info">Explainer</a>
+            <a href="https://webmachinelearning.github.io/webmcp" target="_blank" class="info">Spécification</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>MCP et WebMCP</h3>
+        <table style="font-size: 0.8em;">
+            <thead>
+                <tr><th></th><th>MCP</th><th>WebMCP</th></tr>
+            </thead>
+            <tbody>
+                <tr><td>Côté</td><td>Serveur</td><td>Page web</td></tr>
+                <tr><td>Cycle de vie</td><td>Persistant (processus, serveur)</td><td>Éphémère, lié à l'onglet</td></tr>
+                <tr><td>Portée</td><td>Partout : desktop, mobile, cloud</td><td>Agents de navigateur</td></tr>
+                <tr><td>Interface</td><td>Aucune, hors de l'application</td><td>Dans le navigateur, accès au DOM</td></tr>
+                <tr><td>Découverte</td><td>Serveur configuré dans chaque host</td><td>Tools enregistrés pendant la visite</td></tr>
+                <tr><td>Usage</td><td>Actions d'API en arrière-plan</td><td>Agir sur l'interface affichée</td></tr>
+            </tbody>
+        </table>
+        <footer>
+            <a href="https://developer.chrome.com/docs/ai/webmcp/compare-mcp" target="_blank" class="info">WebMCP versus MCP</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Deux technologies complémentaires</h3>
+        <ul>
+            <li><strong>MCP</strong> : la couche de services, disponible pour tout host, à tout moment</li>
+            <li><strong>WebMCP</strong> : le dernier kilomètre, quand l'utilisateur a le site ouvert
+                <ul>
+                    <li>l'agent agit avec la <strong>session</strong> de l'utilisateur (cookies, état de la page)</li>
+                    <li>pas d'aller-retour vers un serveur distant pour découvrir les tools</li>
+                </ul>
+            </li>
+            <li>Fil rouge : le serveur MCP <code>tickets</code> sert Copilot ; des tools WebMCP sur les pages de l'application servent l'agent du navigateur</li>
+            <li>Cas d'usage : support client, réservation, formulaires longs, filtres complexes, diagnostic</li>
+        </ul>
+        <footer>
+            <a href="https://developer.chrome.com/docs/ai/webmcp/use-cases" target="_blank" class="info">When to use WebMCP</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Activer WebMCP</h3>
+        <ul>
+            <li>L'API est <strong>en discussion</strong> et peut encore changer</li>
+            <li>En local : <code>chrome://flags/#enable-webmcp-testing</code> → <strong>Enabled</strong>, puis relancer Chrome</li>
+            <li>En production : <strong>origin trial</strong> à partir de Chrome 149</li>
+            <li>Permissions Policy <code>tools</code> : autorisée par défaut pour la page et ses iframes de même origine</li>
+        </ul>
+        <p>Une page reste utilisable sans WebMCP : on teste la présence de l'API avant de s'en servir.</p>
+        <pre><code class="language-javascript">if (document.modelContext) {
+  // Enregistrer les tools
+}</code></pre>
+        <footer>
+            <a href="https://developer.chrome.com/docs/ai/webmcp#get_started" target="_blank" class="info">Get started</a>
+            <a href="https://chromestatus.com/feature/5117755740913664" target="_blank" class="info">Chrome Status</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>API impérative : <code>registerTool()</code></h3>
+        <pre style="font-size: 0.5em;" data-line="1-4,12" class="line-numbers"><code class="language-javascript">await document.modelContext.registerTool({
+  name: 'assign_ticket',
+  description: 'Assigne un ticket à un membre du support.',
+  inputSchema: {
+    type: 'object',
+    properties: {
+      id: { type: 'integer', description: 'Identifiant du ticket' },
+      assignee: { type: 'string', description: 'Nom du membre du support' },
+    },
+    required: ['id', 'assignee'],
+  },
+  execute: async ({ id, assignee }) =&gt; {
+    const response = await fetch(`/tickets/${id}/assign`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ assignee }),
+    });
+    if (!response.ok) {
+      return `Ticket #${id} introuvable ou non modifiable (HTTP ${response.status}).`;
+    }
+    document.querySelector(`[data-ticket="${id}"] .assignee`).textContent = assignee;
+    return `Ticket #${id} assigné à ${assignee}.`;
+  },
+});</code></pre>
+        <footer>
+            <a href="https://developer.chrome.com/docs/ai/webmcp/imperative-api" target="_blank" class="info">Imperative API</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>API impérative : <code>registerTool()</code></h3>
+        <ul>
+            <li><code>name</code>, <code>description</code> et <code>inputSchema</code> : comme un tool MCP</li>
+            <li><code>execute</code> reçoit les arguments ; la valeur renvoyée est transmise au modèle</li>
+            <li><code>fetch()</code> part avec les <strong>cookies de session</strong> : l'agent agit avec les droits de l'utilisateur connecté, sans OAuth</li>
+            <li>Le tool met à jour l'interface : l'utilisateur voit le résultat</li>
+            <li>Les contraintes du schéma ne sont pas garanties : <strong>revalider côté serveur</strong> et renvoyer une erreur que le modèle peut corriger</li>
+        </ul>
+        <p>React (<code>usewebmcp</code>), Vue (<code>useWebMCP</code> de <code>@vueuse/core</code>) et Angular proposent une intégration expérimentale.</p>
+        <footer>
+            <a href="https://developer.chrome.com/docs/ai/webmcp/imperative-api" target="_blank" class="info">Imperative API</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Annotations</h3>
+        <table style="font-size: 0.8em;">
+            <thead>
+                <tr><th>Annotation</th><th>Signification (toutes <code>false</code> par défaut)</th></tr>
+            </thead>
+            <tbody>
+                <tr><td><code>readOnlyHint</code></td><td>Le tool lit sans rien modifier</td></tr>
+                <tr><td><code>consequentialHint</code></td><td>Action importante ou irréversible : achat, virement, suppression…</td></tr>
+                <tr><td><code>untrustedContentHint</code></td><td>Le résultat contient des données non fiables (contenu saisi par des utilisateurs, web externe)</td></tr>
+                <tr><td><code>debugging</code></td><td>Tool réservé aux outils de développement (Chrome 156)</td></tr>
+            </tbody>
+        </table>
+        <pre><code class="language-javascript">// get_ticket : la description du ticket est saisie par un client
+annotations: { readOnlyHint: true, untrustedContentHint: true }
+
+// close_ticket
+annotations: { consequentialHint: true }</code></pre>
+        <p>Les annotations MCP vues au chapitre Tools sont différentes : seul <code>readOnlyHint</code> est commun.</p>
+        <footer>
+            <a href="https://developer.chrome.com/docs/ai/webmcp/imperative-api#tool_annotations_optional" target="_blank" class="info">Tool annotations</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Retirer un tool, annuler une exécution</h3>
+        <pre style="font-size: 0.5em;" data-line="4-5,10-11,14" class="line-numbers"><code class="language-javascript">const closeTicketTool = {
+  name: 'close_ticket',
+  // ...
+  execute: async ({ id }, { signal }) =&gt; {
+    const response = await fetch(`/tickets/${id}/close`, { method: 'POST', signal });
+    // ...
+  },
+};
+
+const controller = new AbortController();
+await document.modelContext.registerTool(closeTicketTool, { signal: controller.signal });
+
+// Plus tard, quand la page n'affiche plus de ticket ouvert
+controller.abort();</code></pre>
+        <ul>
+            <li>Un tool s'enregistre quand il est <strong>utile dans l'état de la page</strong>, et se retire sinon</li>
+            <li>Depuis Chrome 153, retirer un tool n'interrompt pas ses exécutions en cours</li>
+            <li><code>signal</code> est déclenché quand l'utilisateur ou l'agent annule l'exécution</li>
+        </ul>
+        <footer>
+            <a href="https://developer.chrome.com/docs/ai/webmcp/imperative-api#unregister_tools" target="_blank" class="info">Unregister tools</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Côté agent : découvrir et exécuter</h3>
+        <pre><code class="language-javascript">const tools = await document.modelContext.getTools();
+const tool = tools.find((t) =&gt; t.name === 'assign_ticket');
+
+const result = await document.modelContext.executeTool(tool, { id: 3, assignee: 'alice' });
+// 'Ticket #3 assigné à alice.'
+
+document.modelContext.addEventListener('toolchange', () =&gt; {
+  // La liste des tools a changé : la relire avant le prochain appel au modèle
+});</code></pre>
+        <ul>
+            <li>L'équivalent de <code>tools/list</code> et <code>tools/call</code>, sans protocole réseau</li>
+            <li>Utilisé par les agents (une extension passe par un content script), et pratique pour tester dans la console</li>
+            <li><code>executeTool()</code> renvoie <code>null</code> si le tool déclenche une navigation</li>
+        </ul>
+        <footer>
+            <a href="https://developer.chrome.com/docs/ai/webmcp/imperative-api#discover_tools" target="_blank" class="info">Discover tools</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>API déclarative : un formulaire devient un tool</h3>
+        <pre style="font-size: 0.5em;" data-line="1-3,6,9" class="line-numbers"><code class="language-html">&lt;form action="/tickets" method="get" toolautosubmit
+      toolname="search_tickets"
+      tooldescription="Recherche des tickets par mot-clé et par statut."&gt;
+    &lt;label for="q"&gt;Mot-clé&lt;/label&gt;
+    &lt;input id="q" name="q"
+           toolparamdescription="Mot recherché dans le titre et la description"&gt;
+    &lt;label for="status"&gt;Statut&lt;/label&gt;
+    &lt;select id="status" name="status" required
+            toolparamdescription="Statut des tickets recherchés"&gt;
+        &lt;option value="open"&gt;Ouverts&lt;/option&gt;
+        &lt;option value="closed"&gt;Fermés&lt;/option&gt;
+    &lt;/select&gt;
+    &lt;button type="submit"&gt;Rechercher&lt;/button&gt;
+&lt;/form&gt;</code></pre>
+        <ul>
+            <li>Le navigateur met le formulaire au premier plan et le remplit <strong>sous les yeux de l'utilisateur</strong></li>
+            <li>Description d'un champ : <code>toolparamdescription</code>, sinon son <code>&lt;label&gt;</code>, sinon <code>aria-description</code></li>
+        </ul>
+        <footer>
+            <a href="https://developer.chrome.com/docs/ai/webmcp/declarative-api" target="_blank" class="info">Declarative API</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Le schéma déduit par le navigateur</h3>
+        <pre style="font-size: 0.5em;"><code class="language-json">{
+  "name": "search_tickets",
+  "description": "Recherche des tickets par mot-clé et par statut.",
+  "inputSchema": {
+    "type": "object",
+    "properties": {
+      "q": { "type": "string", "description": "Mot recherché dans le titre et la description" },
+      "status": {
+        "type": "string",
+        "anyOf": [
+          { "type": "string", "const": "open", "title": "Ouverts" },
+          { "type": "string", "const": "closed", "title": "Fermés" }
+        ],
+        "enum": ["open", "closed"],
+        "description": "Statut des tickets recherchés"
+      }
+    },
+    "required": ["status"]
+  }
+}</code></pre>
+        <p>Un champ = une propriété nommée par son attribut <code>name</code> ; un <code>&lt;select&gt;</code> donne une valeur (<code>const</code>) et un libellé (<code>title</code>) par option ; <code>required</code> se retrouve dans <code>required</code>.</p>
+        <footer>
+            <a href="https://developer.chrome.com/docs/ai/webmcp/declarative-api#optional_tool_parameters" target="_blank" class="info">Tool parameters</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Soumettre le formulaire</h3>
+        <ul>
+            <li>Sans <code>toolautosubmit</code> : l'agent remplit, <strong>l'utilisateur clique</strong> lui-même sur le bouton</li>
+            <li>Avec <code>toolautosubmit</code> : l'agent soumet le formulaire, ce qui déclenche la navigation</li>
+            <li><code>event.agentInvoked</code> : la soumission vient d'un agent</li>
+            <li><code>event.respondWith(promise)</code>, après <code>preventDefault()</code> : la valeur résolue est renvoyée au modèle</li>
+        </ul>
+        <pre style="font-size: 0.5em;"><code class="language-javascript">form.addEventListener('submit', (event) =&gt; {
+  if (!event.agentInvoked) {
+    return; // soumission classique par l'utilisateur
+  }
+  event.preventDefault();
+  event.respondWith(searchTickets(new FormData(form))); // met à jour la liste, résume le résultat
+});</code></pre>
+        <footer>
+            <a href="https://developer.chrome.com/docs/ai/webmcp/declarative-api#submit_the_form" target="_blank" class="info">Submit the form</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Retour visuel</h3>
+        <div class="container">
+            <div class="col">
+                <h4>Événements</h4>
+                <pre style="font-size: 0.5em;"><code class="language-javascript">document.modelContext.addEventListener('toolactivated', ({ toolName }) =&gt; {
+  // L'agent a rempli le formulaire du tool toolName
+});
+
+document.modelContext.addEventListener('toolcancel', ({ toolName }) =&gt; {
+  // L'utilisateur a annulé, ou reset() a été appelé
+});</code></pre>
+            </div>
+            <div class="col">
+                <h4>Pseudo-classes CSS</h4>
+                <pre style="font-size: 0.5em;"><code class="language-css">/* Style par défaut de Chrome */
+form:tool-form-active {
+  outline: light-dark(blue, cyan) dashed 1px;
+  outline-offset: -1px;
+}
+
+input:tool-submit-active {
+  outline: light-dark(red, pink) dashed 1px;
+  outline-offset: -1px;
+}</code></pre>
+            </div>
+        </div>
+        <p>Les pseudo-classes s'appliquent tant que le formulaire n'est ni soumis, ni annulé, ni réinitialisé.</p>
+        <footer>
+            <a href="https://developer.chrome.com/docs/ai/webmcp/declarative-api#modify_focus_indicator" target="_blank" class="info">Focus indicator</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Iframes d'une autre origine</h3>
+        <p>Par défaut, les tools d'une iframe d'une autre origine sont <strong>invisibles</strong>. Trois conditions pour les partager :</p>
+        <pre style="font-size: 0.55em;"><code class="language-html">&lt;!-- https://example.com : déléguer la permission tools --&gt;
+&lt;iframe src="https://partner.org/widget" allow="tools"&gt;&lt;/iframe&gt;</code></pre>
+        <pre style="font-size: 0.55em;"><code class="language-javascript">// https://partner.org : exposer le tool à une origine choisie
+await document.modelContext.registerTool(tool, { exposedTo: ['https://example.com'] });
+
+// https://example.com : demander explicitement les tools de cette origine
+const tools = await document.modelContext.getTools({ fromOrigins: ['https://partner.org'] });</code></pre>
+        <p><mark>N'exposez un tool qu'aux origines à qui vous confieriez ses données ou ses actions.</mark></p>
+        <footer>
+            <a href="https://developer.chrome.com/docs/ai/webmcp/imperative-api#cross-origin_iframes" target="_blank" class="info">Cross-origin iframes</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Sécurité</h3>
+        <ul>
+            <li>Toute extension disposant d'un content script peut lister et exécuter les tools de la page</li>
+            <li><strong>Injection de prompt indirecte</strong> : un tool qui renvoie du contenu saisi par des utilisateurs porte <code>untrustedContentHint</code></li>
+            <li>Action irréversible : <code>consequentialHint</code> permet à l'agent ou au navigateur d'exiger une <strong>confirmation</strong></li>
+            <li>Les annotations sont des <strong>indications</strong> de la page : un site malveillant peut mentir</li>
+            <li>Un tool en lecture seule peut révéler des données personnelles</li>
+            <li>Le schéma n'est pas garanti : la validation reste <strong>côté serveur</strong></li>
+        </ul>
+        <footer>
+            <a href="https://developer.chrome.com/docs/ai/webmcp/secure-tools" target="_blank" class="info">WebMCP tool security</a>
+            <a href="https://developer.chrome.com/docs/agents/security" target="_blank" class="info">Agent security</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Bonnes pratiques</h3>
+        <ul>
+            <li><strong>Un tool, une action</strong> : deux tools qui se chevauchent font hésiter l'agent</li>
+            <li>Un nom précis : <code>create_event</code> crée, <code>start_event_creation</code> ouvre le formulaire</li>
+            <li>Une description <strong>positive</strong> : ce que fait le tool et quand l'utiliser, plutôt que des interdictions</li>
+            <li>Des entrées brutes (<code>"11:00 to 15:00"</code>) et des valeurs parlantes (<code>shipping="Express"</code> plutôt que <code>shipping_id=1</code>)</li>
+            <li>Des erreurs qui guident : « Aucun résultat de recherche. Lancez d'abord <code>search_flights</code>. »</li>
+            <li>Mettre l'interface à jour <strong>avant</strong> de répondre</li>
+            <li>Budgets recommandés : nom 30 caractères, description 500, paramètre 150, résultat 1 500</li>
+        </ul>
+        <footer>
+            <a href="https://developer.chrome.com/docs/ai/webmcp/best-practices" target="_blank" class="info">Best practices</a>
+            <a href="https://developer.chrome.com/docs/ai/webmcp/build-tools" target="_blank" class="info">Build effective tools</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Déboguer avec Chrome DevTools</h3>
+        <p>Panneau <strong>Application → WebMCP</strong> :</p>
+        <ul>
+            <li><strong>Available Tools</strong> : les tools de l'onglet, tels que l'agent les voit, avec un compteur d'appels</li>
+            <li><strong>Invoked Tools</strong> : le journal des appels, avec statut, arguments et résultat</li>
+            <li><strong>Run tool</strong> : exécuter un tool à la main, sans passer par un agent</li>
+            <li>Les erreurs de schéma s'affichent dans le panneau de sortie</li>
+        </ul>
+        <p>Le serveur MCP <code>chrome-devtools-mcp</code> donne les mêmes possibilités à un agent de code (<code>list_webmcp_tools</code>, <code>execute_webmcp_tool</code>) :</p>
+        <pre><code class="language-json">"args": ["chrome-devtools-mcp@latest", "--categoryExperimentalWebmcp"]</code></pre>
+        <footer>
+            <a href="https://developer.chrome.com/docs/devtools/application/webmcp" target="_blank" class="info">DevTools : WebMCP</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>webmcp-extension</h3>
+        <p>Une extension Chrome open source : un <strong>agent d'exemple</strong> dans le panneau latéral, pour tester les tools de son site.</p>
+        <ul>
+            <li>Liste les tools de la page et de ses iframes, et suit <code>toolchange</code></li>
+            <li>Envoie un prompt au modèle, exécute les tools qu'il appelle et affiche la réponse en streaming</li>
+            <li>Deux backends :
+                <ul>
+                    <li><strong>serveur Node.js local</strong> : Google, OpenAI, Anthropic ou Ollama via l'AI SDK ; les clés d'API restent sur le serveur</li>
+                    <li><strong>modèle embarqué</strong> via la Prompt API : ni serveur ni clé, les données restent sur le poste (<code>chrome://flags/#prompt-api-tool-use</code>)</li>
+                </ul>
+            </li>
+            <li>Un tableau de bord journalise chaque requête envoyée au modèle</li>
+        </ul>
+        <footer>
+            <a href="https://github.com/GoogleChromeLabs/webmcp-extension" target="_blank" class="info">webmcp-extension</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>webmcp-extension : installation</h3>
+        <p>Prérequis : Chrome 155 ou plus avec <code>chrome://flags/#enable-webmcp-testing</code>, Node.js 22.18 ou plus.</p>
+        <pre><code class="language-bash">git clone https://github.com/GoogleChromeLabs/webmcp-extension
+cd webmcp-extension
+cp .env.example .env   # MODEL=anthropic:claude-sonnet-4-5, ollama:llama3.2… et la clé d'API
+npm install
+npm run server         # serveur du modèle sur http://localhost:3000
+npm run build          # dans un second terminal : l'extension est générée dans dist/</code></pre>
+        <ol>
+            <li>Ouvrir <code>chrome://extensions</code> et activer le <strong>mode développeur</strong></li>
+            <li><strong>Charger l'extension non empaquetée</strong> : le dossier <code>dist/</code></li>
+            <li>Ouvrir le panneau latéral sur une page qui expose des tools</li>
+        </ol>
+        <p>Le serveur écoute sur le port 3000, comme <code>revealexpress</code> : <code>PORT=4000 npm run server</code> évite le conflit.</p>
+        <footer>
+            <a href="https://github.com/GoogleChromeLabs/webmcp-extension#get-started" target="_blank" class="info">Get started</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>webmcp-extension : les annotations en action</h3>
+        <p>L'extension fait toujours confiance aux annotations, pour montrer leur effet sur un agent :</p>
+        <table style="font-size: 0.8em;">
+            <thead>
+                <tr><th>Annotation</th><th>Comportement</th></tr>
+            </thead>
+            <tbody>
+                <tr><td><code>readOnlyHint: true</code></td><td>Le tool s'exécute sans demander</td></tr>
+                <tr><td><code>readOnlyHint: false</code></td><td>L'utilisateur autorise d'abord : une fois, ou pour le site le temps de la conversation</td></tr>
+                <tr><td><code>consequentialHint: true</code></td><td>L'utilisateur autorise <strong>à chaque fois</strong>, même si le tool se dit en lecture seule</td></tr>
+                <tr><td><code>untrustedContentHint: true</code></td><td>Le résultat est encodé en Base64 ou entouré d'un marqueur aléatoire (<em>spotlighting</em>), et le modèle est prévenu de ne pas y lire d'instructions</td></tr>
+            </tbody>
+        </table>
+        <p>Résultat limité à 8 000 caractères ; au-delà de 10 tours d'appels de tools, l'agent demande s'il doit continuer.</p>
+        <footer>
+            <a href="https://github.com/GoogleChromeLabs/webmcp-extension#trust-boundary" target="_blank" class="info">Trust boundary</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>webmcp-types</h3>
+        <p>Les types TypeScript de <code>document.modelContext</code> et des tools :</p>
+        <pre style="font-size: 0.55em;"><code class="language-bash">npm install --save-dev webmcp-types   # puis "types": ["webmcp-types"] dans tsconfig.json</code></pre>
+        <pre style="font-size: 0.5em;" data-line="7,10" class="line-numbers"><code class="language-typescript">document.modelContext?.registerTool({
+  name: 'assign_ticket',
+  description: 'Assigne un ticket à un membre du support.',
+  inputSchema: {
+    type: 'object',
+    properties: { id: { type: 'integer' }, assignee: { type: 'string' } },
+    required: ['id'],
+  },
+  execute: async ({ id, assignee }, { signal }) =&gt; {
+    // id : number, assignee : string | undefined, signal : AbortSignal
+    return `Ticket #${id} assigné.`;
+  },
+});</code></pre>
+        <p>Les types des arguments de <code>execute()</code> sont <strong>déduits de <code>inputSchema</code></strong> : une propriété absente de <code>required</code> devient facultative.</p>
+        <footer>
+            <a href="https://github.com/webmachinelearning/webmcp-types" target="_blank" class="info">webmcp-types</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>webmcp-skills</h3>
+        <p>Le skill <code>build-webmcp-tools</code> apprend à un agent de code (Claude Code, Gemini CLI, Cursor…) à concevoir et implémenter des tools WebMCP.</p>
+        <pre style="font-size: 0.55em;"><code class="language-bash">npx skills add GoogleChromeLabs/webmcp-tools --path webmcp-skills</code></pre>
+        <ul>
+            <li>Démarche en six étapes : objectifs de l'utilisateur, états de départ, jeu de rôle tour par tour, cas limites, <code>schema.json</code> et <code>evals.json</code>, implémentation</li>
+            <li>Code pour React, Angular, JavaScript ou formulaires HTML</li>
+            <li>Audit des tools existants selon une liste de 16 points : budgets, annotations, erreurs, injection de prompt</li>
+            <li>Évaluations : <code>npx webmcp-evals local -t schema.json -e evals.json</code></li>
+        </ul>
+        <p>Exemples de prompts : « Add WebMCP tools to this project », « Audit the WebMCP tools in this repo ».</p>
+        <footer>
+            <a href="https://github.com/GoogleChromeLabs/webmcp-tools/tree/main/webmcp-skills" target="_blank" class="info">webmcp-skills</a>
+            <a href="https://developer.chrome.com/docs/ai/webmcp/evals" target="_blank" class="info">WebMCP Evals</a>
+        </footer>
+    </section>
+
+    <section>
+        <h3>Exercice</h3>
+        <p>Rendez une page web du projet <code>tickets</code> utilisable par un agent de navigateur.</p>
+        <div class="instructions">
+            <ol>
+                <li>Activez <code>chrome://flags/#enable-webmcp-testing</code> et relancez Chrome.</li>
+                <li>Avec <code>make:controller</code>, créez une page <code>/tickets</code> qui liste les tickets (un attribut <code>data-ticket</code> par ligne).</li>
+                <li>Ajoutez le formulaire déclaratif <code>search_tickets</code>, traité en <code>GET</code> par le contrôleur.</li>
+                <li>Enregistrez en JavaScript un tool <code>get_ticket</code> qui renvoie le détail d'un ticket affiché, avec les annotations adaptées.</li>
+                <li>Vérifiez dans DevTools (<strong>Application → WebMCP</strong>) que les deux tools apparaissent, puis exécutez-les à la main.</li>
+                <li>Avec webmcp-extension, demandez « Montre-moi les tickets ouverts », puis « Résume le ticket 2 ».</li>
+                <li>Bonus : créez un ticket dont la description contient des instructions, et comparez la réponse avec et sans <code>untrustedContentHint</code>.</li>
+            </ol>
+        </div>
+    </section>
+
+</section>

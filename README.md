@@ -113,6 +113,7 @@ Le cours enseigne l'ère `modern` du protocole ; l'ère `legacy` est présentée
 - Déclaration par attributs (`#[McpTool]`, `#[Schema]`), `ToolCallException`, `structuredContent`
 - `debug:mcp`
 - Une seule URL pour les deux ères ; comparaison fait main / SDK
+- Serveur de développement : le flux `subscriptions/listen` exige `output_buffering=0` et un serveur multi-processus (PHP-FPM ou `PHP_CLI_SERVER_WORKERS`)
 - Connexion depuis VS Code (ère `legacy`)
 
 #### Mise en pratique (45 min)
@@ -225,6 +226,27 @@ Le cours enseigne l'ère `modern` du protocole ; l'ère `legacy` est présentée
 
 ---
 
+### Chapitre 12.1 : WebMCP (1h)
+
+#### Objectifs
+- Situer WebMCP par rapport à MCP
+- Exposer les fonctionnalités d'une page web à un agent de navigateur
+- Tester ses tools avec les outils de développement fournis par Chrome
+
+#### Contenu théorique (30 min)
+- Actuation contre tools déclarés ; comparaison et complémentarité avec MCP
+- Activation : flag `enable-webmcp-testing`, origin trial, Permissions Policy `tools`
+- API impérative : `document.modelContext.registerTool()`, annotations (`readOnlyHint`, `consequentialHint`, `untrustedContentHint`, `debugging`), `AbortSignal`, `getTools()`, `executeTool()`, `toolchange`
+- API déclarative : `toolname`, `tooldescription`, `toolparamdescription`, `toolautosubmit`, schéma déduit, `agentInvoked`, `respondWith()`, `toolactivated`, `toolcancel`, `:tool-form-active`
+- Iframes d'une autre origine (`allow="tools"`, `exposedTo`, `fromOrigins`), sécurité, bonnes pratiques
+- Outillage : panneau WebMCP de DevTools, `webmcp-extension`, `webmcp-types`, `webmcp-skills`
+
+#### Mise en pratique (30 min)
+- Fil rouge : page `/tickets` avec le formulaire déclaratif `search_tickets` et le tool impératif `get_ticket`
+- Tester dans DevTools puis avec `webmcp-extension`
+
+---
+
 ### Chapitre 13 : Aller plus loin (30 min)
 
 #### Contenu théorique (30 min)
@@ -242,3 +264,4 @@ Le cours enseigne l'ère `modern` du protocole ; l'ère `legacy` est présentée
 - [SDK PHP](https://github.com/modelcontextprotocol/php-sdk) et [MCP Bundle de Symfony](https://symfony.com/doc/current/ai/bundles/mcp-bundle.html)
 - [MCP Inspector](https://modelcontextprotocol.io/docs/tools/inspector)
 - [Extensions officielles](https://modelcontextprotocol.io/extensions/overview)
+- [WebMCP](https://developer.chrome.com/docs/ai/webmcp) ([explainer](https://github.com/webmachinelearning/webmcp))
