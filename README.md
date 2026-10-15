@@ -113,6 +113,7 @@ Le cours enseigne l'ère `modern` du protocole ; l'ère `legacy` est présentée
 - Déclaration par attributs (`#[McpTool]`, `#[Schema]`), `ToolCallException`, `structuredContent`
 - `debug:mcp`
 - Une seule URL pour les deux ères ; comparaison fait main / SDK
+- Serveur de développement : le flux `subscriptions/listen` exige `output_buffering=0` et un serveur multi-processus (PHP-FPM ou `PHP_CLI_SERVER_WORKERS`)
 - Connexion depuis VS Code (ère `legacy`)
 
 #### Mise en pratique (45 min)

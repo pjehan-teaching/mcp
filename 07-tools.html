@@ -26,7 +26,7 @@
   "inputSchema": {
     "type": "object",
     "properties": {
-      "status": { "type": ["null", "string"], "default": null, "enum": ["open", "closed"] }
+      "status": { "type": "string", "default": null, "enum": ["open", "closed"] }
     }
   },
   "annotations": { "readOnlyHint": true }
@@ -69,7 +69,7 @@ final class TicketTools
      * Liste les tickets de support, éventuellement filtrés par statut.
      */
     #[McpTool(name: 'list_tickets', annotations: new ToolAnnotations(readOnlyHint: true))]
-    public function list(#[Schema(enum: ['open', 'closed'])] ?string $status = null): array
+    public function list(#[Schema(type: 'string', enum: ['open', 'closed'])] ?string $status = null): array
     {
         $tickets = $status ? $this-&gt;tickets-&gt;findBy(['status' =&gt; $status]) : $this-&gt;tickets-&gt;findAll();
 
