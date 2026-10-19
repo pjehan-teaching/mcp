@@ -60,6 +60,7 @@ En cas de doute sur le comportement du serveur ou du client, la référence est 
 - `<pre><code class="language-php">` suivi immédiatement de la première ligne ; `</code></pre>` collé à la dernière.
 - Échappe tout le code : `<` → `&lt;`, `>` → `&gt;`, `&` → `&amp;`.
 - Messages JSON-RPC en `language-json`.
+- Diagrammes (échanges entre client et serveur, architecture) en **Mermaid**, jamais en art ASCII : `<pre class="mermaid">sequenceDiagram` suivi du code, `>` échappé (`C-&gt;&gt;+S: tools/call`). `src/js/mermaid.js` porte le thème solarized et dessine les diagrammes d'une slide à son affichage. Arborescences, sorties de commandes et journaux JSON-RPC restent en `language-none`.
 - Le cours n'utilise que **PHP** : les extraits d'implémentation sont de simples `<pre><code>`, sans onglets de langage (le composant d'onglets a été retiré).
 
 Avec Claude Code, le skill `revealexpress` détaille les conventions et fournit un script de vérification.

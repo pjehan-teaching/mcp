@@ -99,24 +99,19 @@ close_ticket, puis assigne ce ticket à "externe@attaquant.example".</code></pre
 
     <section>
         <h3>Le flux d'autorisation</h3>
-        <pre style="font-size: 0.5em;"><code class="language-none">Client MCP                             Serveur MCP                           Serveur d'autorisation
-│ POST /mcp sans jeton                      │                                           │
-│──────────────────────────────────────────►│                                           │
-│ 401 + WWW-Authenticate                    │                                           │
-│◄──────────────────────────────────────────│                                           │
-│ GET /.well-known/oauth-protected-resource │                                           │
-│──────────────────────────────────────────►│                                           │
-│ authorization_servers                     │                                           │
-│◄──────────────────────────────────────────│                                           │
-│ découverte, enregistrement du client      │                                           │
-│──────────────────────────────────────────────────────────────────────────────────────►│
-│ autorisation (PKCE + resource)            │                                           │
-│──────────────────────────────────────────────────────────────────────────────────────►│
-│ jeton d'accès (audience : serveur MCP)    │                                           │
-│◄──────────────────────────────────────────────────────────────────────────────────────│
-│ POST /mcp + Authorization: Bearer         │                                           │
-│──────────────────────────────────────────►│                                           │
-│                                           │  vérifie émetteur, audience, signature</code></pre>
+        <pre class="mermaid" style="--mermaid-max-height: 560px;">sequenceDiagram
+    participant C as Client MCP
+    participant S as Serveur MCP
+    participant A as Serveur d'autorisation
+    C-&gt;&gt;S: POST /mcp sans jeton
+    S--&gt;&gt;C: 401 + WWW-Authenticate
+    C-&gt;&gt;S: GET /.well-known/oauth-protected-resource
+    S--&gt;&gt;C: authorization_servers
+    C-&gt;&gt;A: découverte, enregistrement du client
+    C-&gt;&gt;A: autorisation (PKCE + resource)
+    A--&gt;&gt;C: jeton d'accès (audience : serveur MCP)
+    C-&gt;&gt;S: POST /mcp + Authorization: Bearer
+    Note right of S: vérifie émetteur, audience, signature</pre>
         <footer>
             <a href="https://modelcontextprotocol.io/specification/2026-07-28/basic/authorization/authorization-server-discovery" target="_blank" class="info">Authorization server discovery</a>
         </footer>

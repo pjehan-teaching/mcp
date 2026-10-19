@@ -66,3 +66,19 @@
     }
 
 }
+
+.reveal pre.mermaid {
+    width: 100%;
+    box-shadow: none;
+    background: transparent;
+    font-size: 0.5em;
+    text-align: center;
+    // Mermaid source, shown until the diagram is rendered
+    &:not([data-processed]) {
+        visibility: hidden;
+    }
+    svg {
+        // A slide with little text raises it: style="--mermaid-max-height: 560px;"
+        max-height: var(--mermaid-max-height, 420px);
+    }
+}

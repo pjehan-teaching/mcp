@@ -8,6 +8,7 @@
     "start": "node ../../revealexpress/src/server/dev.ts --path ."
   },
   "devDependencies": {
+    "mermaid": "^12.2.0",
     "prismjs": "^1.30.0",
     "sass": "^1.104.1",
     "vite": "^8.3.0"

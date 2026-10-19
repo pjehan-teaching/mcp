@@ -20,17 +20,15 @@
 
     <section>
         <h3>Ère <code>legacy</code> : le serveur interroge le client</h3>
-        <pre><code class="language-none">Client                                     Serveur
-│ tools/call close_ticket (id 1)              │
-│────────────────────────────────────────────►│
-│                                             │  traitement en cours…
-│ elicitation/create (id 7)                   │
-│◄────────────────────────────────────────────│
-│                                             │  le serveur attend la réponse
-│ réponse (id 7) : action accept              │
-│────────────────────────────────────────────►│
-│ résultat (id 1)                             │
-│◄────────────────────────────────────────────│</code></pre>
+        <pre class="mermaid">sequenceDiagram
+    participant C as Client
+    participant S as Serveur
+    C-&gt;&gt;+S: tools/call close_ticket (id 1)
+    Note right of S: traitement en cours…
+    S-&gt;&gt;+C: elicitation/create (id 7)
+    Note right of S: le serveur attend la réponse
+    C--&gt;&gt;-S: réponse (id 7) : action accept
+    S--&gt;&gt;-C: résultat (id 1)</pre>
         <ul>
             <li>Le serveur envoie <strong>sa propre requête</strong> pendant le traitement de <code>tools/call</code></li>
             <li>La requête d'origine reste <strong>ouverte</strong> jusqu'à la réponse de l'utilisateur</li>
@@ -43,17 +41,15 @@
 
     <section>
         <h3>Ère <code>modern</code> : Multi Round-Trip Requests</h3>
-        <pre><code class="language-none">Client                                     Serveur
-│ tools/call close_ticket (id 2)              │
-│────────────────────────────────────────────►│
-│                                             │  il manque une confirmation
-│ résultat (id 2) : input_required            │
-│◄────────────────────────────────────────────│
-│                                             │  le serveur ne garde rien en mémoire
-│ tools/call (id 3) + inputResponses          │
-│────────────────────────────────────────────►│
-│ résultat (id 3) : complete                  │
-│◄────────────────────────────────────────────│</code></pre>
+        <pre class="mermaid">sequenceDiagram
+    participant C as Client
+    participant S as Serveur
+    C-&gt;&gt;+S: tools/call close_ticket (id 2)
+    Note right of S: il manque une confirmation
+    S--&gt;&gt;-C: résultat (id 2) : input_required
+    Note right of S: le serveur ne garde rien en mémoire
+    C-&gt;&gt;+S: tools/call (id 3) + inputResponses
+    S--&gt;&gt;-C: résultat (id 3) : complete</pre>
         <ul>
             <li>Le serveur <strong>répond</strong> qu'il lui manque une information (<code>input_required</code>)</li>
             <li>Le client recueille la réponse, puis <strong>relance la requête d'origine</strong> avec un nouvel <code>id</code></li>

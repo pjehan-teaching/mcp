@@ -88,13 +88,15 @@
             <li><strong>Client</strong> : composant du host qui maintient la connexion avec <strong>un</strong> serveur</li>
             <li><strong>Serveur</strong> : programme qui expose des fonctionnalités et des données au client</li>
         </ul>
-        <pre><code class="language-none">┌───────── Host (VS Code) ─────────┐
-│                                  │
-│  Modèle ─┬─ Client 1 ────────────┼──► Serveur filesystem (local, stdio)
-│          ├─ Client 2 ────────────┼──► Serveur GitHub (distant, HTTP)
-│          └─ Client 3 ────────────┼──► Serveur tickets (local, stdio)
-│                                  │
-└──────────────────────────────────┘</code></pre>
+        <pre class="mermaid">flowchart LR
+    subgraph host ["Host (VS Code)"]
+        M[Modèle] --- C1[Client 1]
+        M --- C2[Client 2]
+        M --- C3[Client 3]
+    end
+    C1 -- stdio --&gt; F["Serveur filesystem (local)"]
+    C2 -- HTTP --&gt; G["Serveur GitHub (distant)"]
+    C3 -- stdio --&gt; T["Serveur tickets (local)"]</pre>
         <p>Le host crée <strong>un client par serveur</strong> connecté.</p>
         <footer>
             <a href="https://modelcontextprotocol.io/docs/2026-07-28/learn/architecture" target="_blank" class="info">Architecture overview</a>
