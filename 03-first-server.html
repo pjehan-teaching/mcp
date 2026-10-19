@@ -22,13 +22,14 @@
         <pre><code class="language-bash">symfony new tickets-raw
 # sans le binaire symfony : composer create-project symfony/skeleton tickets-raw
 cd tickets-raw
-composer require orm serializer # répondre « n » à la recette Docker
+composer require orm serializer monolog # répondre « n » à la recette Docker
 composer require --dev orm-fixtures maker</code></pre>
         <p>Une base SQLite suffit : on la déclare dans <code>.env.local</code>, qui surcharge <code>.env</code> :</p>
         <pre><code class="language-bash">echo 'DATABASE_URL="sqlite:///%kernel.project_dir%/var/data.db"' &gt; .env.local</code></pre>
         <ul>
             <li><code>symfony new</code> : Symfony 8.1, PHP 8.4 ou plus</li>
             <li><code>orm</code> : Doctrine ORM ; <code>serializer</code> : transforme les objets en JSON</li>
+            <li><code>monolog</code> : journalise dans <code>var/log/dev.log</code>, avec le détail des exceptions</li>
             <li><code>orm-fixtures</code> : données de départ ; <code>maker</code> : générateurs de code (<code>make:entity</code>…)</li>
         </ul>
         <footer>

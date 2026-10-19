@@ -25,12 +25,13 @@
         <p>On repart d'un projet vide pour mesurer ce que le <abbr title="Software Development Kit">SDK</abbr> apporte :</p>
         <pre style="font-size: 0.55em;"><code class="language-bash">symfony new tickets
 cd tickets
-composer require orm serializer symfony/mcp-bundle nyholm/psr7 # « n » à la recette Docker
+composer require orm serializer monolog symfony/mcp-bundle nyholm/psr7 # « n » à la recette Docker
 composer require --dev orm-fixtures maker
 echo 'DATABASE_URL="sqlite:///%kernel.project_dir%/var/data.db"' &gt; .env.local
 php bin/console make:entity Ticket --field=title:string --field=description:text --field=status:string:20 --field='assignee:string?'</code></pre>
         <ul>
             <li><code>nyholm/psr7</code> : le transport HTTP du SDK manipule des requêtes <strong>PSR-7</strong> ; sans implémentation, chaque requête échoue en <code>500</code></li>
+            <li><code>monolog</code> : sans lui, une exception dans un tool n'apparaît que sous la forme d'une erreur <code>-32603</code> ; <code>var/log/dev.log</code> en donne la cause</li>
             <li>Mêmes commandes que pour <code>tickets-raw</code> : <code>.env.local</code>, entité <code>Ticket</code> et <code>TicketRepository</code></li>
             <li>Il ne reste qu'à copier <code>src/DataFixtures/AppFixtures.php</code> depuis <code>tickets-raw</code></li>
             <li>Créez la base : <code>make:migration</code>, <code>doctrine:migrations:migrate</code> puis <code>doctrine:fixtures:load</code></li>
